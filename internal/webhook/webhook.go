@@ -31,7 +31,7 @@ const (
 	reviewStateApproved = "approved"
 	reviewTypeSubmitted = "submitted"
 	reviewTypeDismissed = "dismissed"
-	DefaultGitHubURL    = "https://api.github.com"
+	DefaultGitHubURL    = "https://github.com"
 )
 
 type EnvConfig struct {
@@ -41,7 +41,7 @@ type EnvConfig struct {
 	IDProviderEndpoint string `envconfig:"ID_PROVIDER_ENDPOINT" default:"https://github.com/login/oauth"`
 	AppID              int64  `envconfig:"GITHUB_APP_ID" required:"true"`
 	WebhookSecret      string `envconfig:"GITHUB_WEBHOOK_SECRET" required:"true"`
-	GitHubURL          string `envconfig:"GITHUB_URL" default:"https://api.github.com"`
+	GitHubURL          string `envconfig:"GITHUB_URL" default:"https://github.com"`
 	AppEmailID         string `envconfig:"APP_EMAIL_ID" required:"true"`
 	DevMode            bool   `envconfig:"DEV_MODE" default:"false"` // in dev mode, we use a key stored on disk
 }
@@ -292,10 +292,10 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	}
 
 	if *event.Action == reviewTypeSubmitted {
-		args := []string{"dev", "add-github-approval", "--repository", owner + "/" + repository, "--pull-request-number", fmt.Sprintf("%d", *event.PullRequest.Number), "--review-ID", fmt.Sprintf("%d", *event.Review.ID), "--approver", approver, "-k", g.Params.KMSKey}
+		args := []string{"dev", "add-github-approval", "--base-URL", g.Params.GitHubURL, "--repository", owner + "/" + repository, "--pull-request-number", fmt.Sprintf("%d", *event.PullRequest.Number), "--review-ID", fmt.Sprintf("%d", *event.Review.ID), "--approver", approver, "-k", g.Params.KMSKey}
 		log.Default().Print("cmd: ", strings.Join(args, " "))
 		cmd = exec.Command("/app/gittuf", args...)
-		cmd.Env = append(os.Environ(), fmt.Sprintf("GITHUB_BASE_URL=%s", g.Params.GitHubURL), fmt.Sprintf("GITHUB_TOKEN=%s", token))
+		cmd.Env = append(os.Environ(), fmt.Sprintf("GITHUB_TOKEN=%s", token))
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			log.Default().Print("gittuf attest: " + err.Error() + " " + string(output))
@@ -304,10 +304,10 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 
 		message = fmt.Sprintf("Observed review from %s, @%s", approver, *reviewer.Login)
 	} else if *event.Action == reviewTypeDismissed {
-		args := []string{"dev", "dismiss-github-approval", "--review-ID", fmt.Sprintf("%d", *event.Review.ID), "--dismiss-approver", approver, "-k", g.Params.KMSKey}
+		args := []string{"dev", "dismiss-github-approval", "--base-URL", g.Params.GitHubURL, "--review-ID", fmt.Sprintf("%d", *event.Review.ID), "--dismiss-approver", approver, "-k", g.Params.KMSKey}
 		log.Default().Print("cmd: ", strings.Join(args, " "))
 		cmd = exec.Command("/app/gittuf", args...)
-		cmd.Env = append(os.Environ(), fmt.Sprintf("GITHUB_BASE_URL=%s", g.Params.GitHubURL), fmt.Sprintf("GITHUB_TOKEN=%s", token))
+		cmd.Env = append(os.Environ(), fmt.Sprintf("GITHUB_TOKEN=%s", token))
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			log.Default().Print("gittuf attest: " + err.Error() + " " + string(output))
