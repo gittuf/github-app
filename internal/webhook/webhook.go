@@ -186,6 +186,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	// TODO: might interfere with other instances?
 	os.Setenv("GIT_DIR", filepath.Join(localDirectory, ".git"))
 	defer os.Unsetenv("GIT_DIR")
+	os.Setenv("GITHUB_DEV", "1") // TODO
 
 	repo, err := gittuf.LoadRepository()
 	if err != nil {
@@ -195,6 +196,15 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 
 	if err := gitRepo.Fetch("origin", []string{"refs/gittuf/*"}, true); err != nil {
 		log.Default().Print("fetch gittuf and base: " + err.Error())
+		return err
+	}
+
+	signer, err := gittuf.LoadSigner(g.Params.KMSKey)
+	if err != nil {
+		return err
+	}
+
+	if err := repo.AddGitHubPullRequestAttestationForCommit(ctx, signer, g.Params.GitHubURL, owner, repository, *event.PullRequest.MergeCommitSHA, *event.PullRequest.Base.Ref, true); err != nil {
 		return err
 	}
 
@@ -293,8 +303,9 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		return err
 	}
 
-	os.Setenv("GITHUB_TOKEN", token) //TODO
+	os.Setenv("GITHUB_TOKEN", token) // TODO
 	defer os.Unsetenv("GITHUB_TOKEN")
+	os.Setenv("GITHUB_DEV", "1") // TODO
 
 	signer, err := gittuf.LoadSigner(g.Params.KMSKey)
 	if err != nil {
