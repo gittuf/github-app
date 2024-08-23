@@ -17,10 +17,10 @@ import (
 	"time"
 
 	gkms "cloud.google.com/go/kms/apiv1"
-	akms "github.com/aws/aws-sdk-go-v2/service/kms"
-
-	secretmanager "cloud.google.com/go/secretmanager/apiv1"
+	gsecretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
+	akms "github.com/aws/aws-sdk-go-v2/service/kms"
+	asecretsmanager "github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/gittuf/github-app/internal/awskms"
 	"github.com/gittuf/github-app/internal/webhook"
@@ -103,18 +103,34 @@ func main() {
 		// TODO: remove this
 		webhookSecrets = append(webhookSecrets, []byte(env.WebhookSecret))
 	} else {
-		secretmanager, err := secretmanager.NewClient(ctx)
-		if err != nil {
-			log.Panicf("could not create secret manager client: %v", err)
-		}
-		for _, name := range strings.Split(env.WebhookSecret, ",") {
-			resp, err := secretmanager.AccessSecretVersion(ctx, &secretmanagerpb.AccessSecretVersionRequest{
-				Name: name,
-			})
-			if err != nil {
-				log.Panicf("error fetching webhook secret %s: %v", name, err)
+		// Assuming KMS and secrets manager are on the same cloud
+		switch {
+		case strings.HasPrefix(env.KMSKey, "aws"):
+			secretmanager := asecretsmanager.New(asecretsmanager.Options{}) // TODO
+			for _, name := range strings.Split(env.WebhookSecret, ",") {
+				resp, err := secretmanager.GetSecretValue(ctx, &asecretsmanager.GetSecretValueInput{
+					SecretId: &name,
+				})
+				if err != nil {
+					log.Panicf("error fetching webhook secret '%s' from AWS: %v", name, err)
+				}
+				// TODO: may be SecretBinary?
+				webhookSecrets = append(webhookSecrets, []byte(*resp.SecretString))
 			}
-			webhookSecrets = append(webhookSecrets, resp.GetPayload().GetData())
+		case strings.HasPrefix(env.KMSKey, "gcp"):
+			secretmanager, err := gsecretmanager.NewClient(ctx)
+			if err != nil {
+				log.Panicf("could not create secret manager client: %v", err)
+			}
+			for _, name := range strings.Split(env.WebhookSecret, ",") {
+				resp, err := secretmanager.AccessSecretVersion(ctx, &secretmanagerpb.AccessSecretVersionRequest{
+					Name: name,
+				})
+				if err != nil {
+					log.Panicf("error fetching webhook secret %s: %v", name, err)
+				}
+				webhookSecrets = append(webhookSecrets, resp.GetPayload().GetData())
+			}
 		}
 	}
 

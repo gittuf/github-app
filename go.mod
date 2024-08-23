@@ -8,6 +8,7 @@ require (
 	cloud.google.com/go/kms v1.18.4
 	cloud.google.com/go/secretmanager v1.13.5
 	github.com/aws/aws-sdk-go-v2/service/kms v1.35.3
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.32.6
 	github.com/bradleyfalzon/ghinstallation/v2 v2.10.1-0.20240507094914-84bb4cbb7874
 	github.com/gittuf/gittuf v0.5.3-0.20240823192614-59a759c7138a
 	github.com/go-git/go-git/v5 v5.12.0
@@ -29,10 +30,10 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.0.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.30.3 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.15 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.15 // indirect
-	github.com/aws/smithy-go v1.20.3 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.30.4 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.16 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.16 // indirect
+	github.com/aws/smithy-go v1.20.4 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/cloudflare/circl v1.3.7 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.14.3 // indirect
