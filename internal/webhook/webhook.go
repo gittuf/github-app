@@ -14,11 +14,14 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
-	"strings"
 	"sync"
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
+	"github.com/gittuf/gittuf/gittuf"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/google/go-github/v61/github"
 )
 
@@ -161,10 +164,6 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 		return err
 	}
 
-	pwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
 	cloneURL := *event.PullRequest.Base.Repo.CloneURL
 
 	parsedURL, err := url.Parse(cloneURL)
@@ -178,31 +177,33 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command("git", "clone", "--branch", *event.PullRequest.Base.Ref, cloneURL, localDirectory)
-	if err := cmd.Run(); err != nil {
+
+	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, ReferenceName: plumbing.ReferenceName(*event.PullRequest.Base.Ref)}); err != nil {
 		log.Default().Print("clone: " + err.Error())
 		return err
 	}
-	// this can be removed once full git binary support lands, control via GIT_DIR env
-	if err := os.Chdir(localDirectory); err != nil {
+
+	// TODO: might interfere with other instances?
+	os.Setenv("GIT_DIR", filepath.Join(localDirectory, ".git"))
+	defer os.Unsetenv("GIT_DIR")
+
+	repo, err := gittuf.LoadRepository()
+	if err != nil {
 		return err
 	}
-	defer os.Chdir(pwd) //nolint:errcheck
+	gitRepo := repo.GetGitRepository()
 
-	cmd = exec.Command("git", "fetch", "origin", "refs/gittuf/*:refs/gittuf/*")
-	if err := cmd.Run(); err != nil {
+	if err := gitRepo.Fetch("origin", []string{"refs/gittuf/*"}, true); err != nil {
 		log.Default().Print("fetch gittuf and base: " + err.Error())
 		return err
 	}
 
-	cmd = exec.Command("/app/gittuf", "rsl", "record", *event.PullRequest.Base.Ref)
-	if err := cmd.Run(); err != nil {
+	if err := repo.RecordRSLEntryForReference(*event.PullRequest.Base.Ref, true); err != nil {
 		log.Default().Print("rsl entry creation: " + err.Error())
 		return err
 	}
 
-	cmd = exec.Command("git", "push", "origin", "refs/gittuf/*")
-	if err := cmd.Run(); err != nil {
+	if err := gitRepo.Push("origin", []string{"refs/gittuf/*"}); err != nil {
 		log.Default().Print("push gittuf: " + err.Error())
 		return err
 	}
@@ -247,11 +248,11 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	reviewer := event.Review.GetUser()
 	// TODO: don't hardcode this as a sigstore approver right now
 	approver := fmt.Sprintf("fulcio:%s::%s", *reviewer.Login, g.Params.IDProviderEndpoint)
-
-	pwd, err := os.Getwd()
+	approverKey, err := gittuf.LoadPublicKey(approver)
 	if err != nil {
 		return err
 	}
+
 	cloneURL := *event.PullRequest.Base.Repo.CloneURL
 
 	parsedURL, err := url.Parse(cloneURL)
@@ -265,60 +266,61 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command("git", "clone", "-b", *event.PullRequest.Base.Ref, cloneURL, localDirectory)
-	if err := cmd.Run(); err != nil {
+
+	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, ReferenceName: plumbing.ReferenceName(*event.PullRequest.Base.Ref)}); err != nil {
 		log.Default().Print("clone: " + err.Error())
 		return err
 	}
-	// this can be removed once full git binary support lands, control via GIT_DIR env
-	if err := os.Chdir(localDirectory); err != nil {
+
+	// TODO: might interfere with other instances?
+	os.Setenv("GIT_DIR", filepath.Join(localDirectory, ".git"))
+	defer os.Unsetenv("GIT_DIR")
+
+	repo, err := gittuf.LoadRepository()
+	if err != nil {
 		return err
 	}
-	defer os.Chdir(pwd) //nolint:errcheck
+	gitRepo := repo.GetGitRepository()
+
+	if err := gitRepo.Fetch("origin", []string{"refs/gittuf/*"}, true); err != nil {
+		log.Default().Print("fetch gittuf and base: " + err.Error())
+		return err
+	}
 
 	// Fetch feature ref
-	cmd = exec.Command("git", "fetch", "origin", fmt.Sprintf("%s:%s", *event.PullRequest.Head.Ref, *event.PullRequest.Head.Ref))
-	if err := cmd.Run(); err != nil {
+	if err := gitRepo.Fetch("origin", []string{*event.PullRequest.Head.Ref}, true); err != nil {
 		log.Default().Print("fetch feature branch: " + err.Error())
 		return err
 	}
 
-	var message string
-	// Fetch gittuf refs
-	cmd = exec.Command("git", "fetch", "origin", "refs/gittuf/*:refs/gittuf/*")
-	if err := cmd.Run(); err != nil {
-		log.Default().Print("fetch gittuf: " + err.Error())
+	os.Setenv("GITHUB_TOKEN", token) //TODO
+	defer os.Unsetenv("GITHUB_TOKEN")
+
+	signer, err := gittuf.LoadSigner(g.Params.KMSKey)
+	if err != nil {
 		return err
 	}
 
-	if *event.Action == reviewTypeSubmitted {
-		args := []string{"dev", "add-github-approval", "--base-URL", g.Params.GitHubURL, "--repository", owner + "/" + repository, "--pull-request-number", fmt.Sprintf("%d", *event.PullRequest.Number), "--review-ID", fmt.Sprintf("%d", *event.Review.ID), "--approver", approver, "-k", g.Params.KMSKey}
-		log.Default().Print("cmd: ", strings.Join(args, " "))
-		cmd = exec.Command("/app/gittuf", args...)
-		cmd.Env = append(os.Environ(), fmt.Sprintf("GITHUB_TOKEN=%s", token))
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			log.Default().Print("gittuf attest: " + err.Error() + " " + string(output))
+	var message string
+	switch *event.Action {
+	case reviewTypeSubmitted:
+		if err := repo.AddGitHubPullRequestApprover(ctx, signer, g.Params.GitHubURL, owner, repository, *event.PullRequest.Number, *event.Review.ID, approverKey, true); err != nil {
+			log.Default().Print("gittuf attest: " + err.Error())
 			return err
 		}
 
 		message = fmt.Sprintf("Observed review from %s, @%s", approver, *reviewer.Login)
-	} else if *event.Action == reviewTypeDismissed {
-		args := []string{"dev", "dismiss-github-approval", "--base-URL", g.Params.GitHubURL, "--review-ID", fmt.Sprintf("%d", *event.Review.ID), "--dismiss-approver", approver, "-k", g.Params.KMSKey}
-		log.Default().Print("cmd: ", strings.Join(args, " "))
-		cmd = exec.Command("/app/gittuf", args...)
-		cmd.Env = append(os.Environ(), fmt.Sprintf("GITHUB_TOKEN=%s", token))
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			log.Default().Print("gittuf attest: " + err.Error() + " " + string(output))
+
+	case reviewTypeDismissed:
+		if err := repo.DismissGitHubPullRequestApprover(ctx, signer, g.Params.GitHubURL, *event.Review.ID, approverKey, true); err != nil {
+			log.Default().Print("gittuf attest: " + err.Error())
 			return err
 		}
 
 		message = fmt.Sprintf("Observed dismissal of review by %s", approver)
 	}
 
-	cmd = exec.Command("git", "push", "origin", "refs/gittuf/*")
-	if err := cmd.Run(); err != nil {
+	if err := gitRepo.Push("origin", []string{"refs/gittuf/*"}); err != nil {
 		log.Default().Print("push gittuf: " + err.Error())
 		return err
 	}
