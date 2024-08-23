@@ -17,10 +17,12 @@ import (
 	"time"
 
 	gkms "cloud.google.com/go/kms/apiv1"
+	akms "github.com/aws/aws-sdk-go-v2/service/kms"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"github.com/bradleyfalzon/ghinstallation/v2"
+	"github.com/gittuf/github-app/internal/awskms"
 	"github.com/gittuf/github-app/internal/webhook"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/kelseyhightower/envconfig"
@@ -44,7 +46,10 @@ func main() {
 
 	log.Default().Println("Processed env vars")
 
-	var signer ghinstallation.Signer
+	var (
+		signer ghinstallation.Signer
+		err    error
+	)
 	if env.DevMode {
 		// TODO: we should eventually remove this code path altogether
 		keyBytes, err := os.ReadFile(env.KMSKey)
@@ -67,6 +72,12 @@ func main() {
 		log.Printf("Created signer using on disk key")
 	} else {
 		switch {
+		case strings.HasPrefix(env.KMSKey, "aws"):
+			kms := akms.New(akms.Options{})
+			signer, err = awskms.New(ctx, kms, env.KMSKey)
+			if err != nil {
+				log.Panicf("error creating AWS signer: %v", err)
+			}
 		case strings.HasPrefix(env.KMSKey, "gcp"):
 			kms, err := gkms.NewKeyManagementClient(ctx)
 			if err != nil {
@@ -74,7 +85,7 @@ func main() {
 			}
 			signer, err = gcpkms.New(ctx, kms, env.KMSKey)
 			if err != nil {
-				log.Panicf("error creating signer: %v", err)
+				log.Panicf("error creating GCP signer: %v", err)
 			}
 		}
 	}
