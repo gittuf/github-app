@@ -73,7 +73,7 @@ func (g *GittufApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			panic(err)
 		}
 
-		cmd = exec.Command("git", "config", "--global", "user.signingkey", g.Params.KMSKey)
+		cmd = exec.Command("git", "config", "--global", "user.signingkey", "/root/.ssh/key")
 		if err := cmd.Run(); err != nil {
 			panic(err)
 		}
@@ -205,7 +205,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 		return err
 	}
 
-	signer, err := gittuf.LoadSigner(g.Params.AppSigningKey)
+	signer, err := gittuf.LoadSigner("/root/.ssh/key")
 	if err != nil {
 		return err
 	}
@@ -313,7 +313,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	defer os.Unsetenv("GITHUB_TOKEN")
 	os.Setenv("GITHUB_DEV", "1") // TODO
 
-	signer, err := gittuf.LoadSigner(g.Params.AppSigningKey)
+	signer, err := gittuf.LoadSigner("/root/.ssh/key")
 	if err != nil {
 		return err
 	}
