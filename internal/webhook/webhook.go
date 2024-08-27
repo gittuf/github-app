@@ -192,7 +192,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	// TODO: might interfere with other instances?
 	os.Setenv("GIT_DIR", filepath.Join(localDirectory, ".git"))
 	defer os.Unsetenv("GIT_DIR")
-	os.Setenv("GITHUB_DEV", "1") // TODO
+	os.Setenv("GITTUF_DEV", "1") // TODO
 
 	repo, err := gittuf.LoadRepository()
 	if err != nil {
@@ -311,7 +311,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 
 	os.Setenv("GITHUB_TOKEN", token) // TODO
 	defer os.Unsetenv("GITHUB_TOKEN")
-	os.Setenv("GITHUB_DEV", "1") // TODO
+	os.Setenv("GITTUF_DEV", "1") // TODO
 
 	signer, err := gittuf.LoadSigner("/root/.ssh/key")
 	if err != nil {
