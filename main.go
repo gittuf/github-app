@@ -135,6 +135,33 @@ func main() {
 				}
 				webhookSecrets = append(webhookSecrets, resp.GetPayload().GetData())
 			}
+
+			// TODO: we should switch this to gitsign
+			if err := os.MkdirAll("/root/.ssh", 0o755); err != nil {
+				log.Panicf("unable to create /root/.ssh: %v", err)
+			}
+
+			resp, err := secretmanager.AccessSecretVersion(ctx, &secretmanagerpb.AccessSecretVersionRequest{
+				Name: env.AppSigningKey,
+			})
+			if err != nil {
+				log.Panicf("error fetching signing key: %v", err)
+			}
+
+			if err := os.WriteFile("/root/.ssh/key", resp.GetPayload().GetData(), 0o600); err != nil {
+				log.Panic("unable to write private key; %v", err)
+			}
+
+			resp, err = secretmanager.AccessSecretVersion(ctx, &secretmanagerpb.AccessSecretVersionRequest{
+				Name: env.AppSigningPubKey,
+			})
+			if err != nil {
+				log.Panicf("error fetching public key: %v", err)
+			}
+
+			if err := os.WriteFile("/root/.ssh/key.pub", resp.GetPayload().GetData(), 0o600); err != nil {
+				log.Panic("unable to write public key; %v", err)
+			}
 		}
 	}
 

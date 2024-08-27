@@ -49,6 +49,7 @@ type EnvConfig struct {
 	DevMode            bool   `envconfig:"DEV_MODE" default:"false"` // in dev mode, we use a key stored on disk
 	CloudProvider      string `envconfig:"CLOUD_PROVIDER" default:"gcp"`
 	AppSigningKey      string `envconfig:"APP_SIGNING_KEY" required:"true"`
+	AppSigningPubKey   string `envconfig:"APP_SIGNING_PUBKEY" required:"true"`
 }
 
 type GittufApp struct {
