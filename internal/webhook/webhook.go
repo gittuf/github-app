@@ -47,6 +47,7 @@ type EnvConfig struct {
 	GitHubURL          string `envconfig:"GITHUB_URL" default:"https://github.com"`
 	AppEmailID         string `envconfig:"APP_EMAIL_ID" required:"true"`
 	DevMode            bool   `envconfig:"DEV_MODE" default:"false"` // in dev mode, we use a key stored on disk
+	CloudProvider      string `envconfig:"CLOUD_PROVIDER" default:"gcp"`
 }
 
 type GittufApp struct {

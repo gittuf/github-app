@@ -30,6 +30,11 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+const (
+	cloudProviderAWS = "aws"
+	cloudProviderGCP = "gcp"
+)
+
 func main() {
 	/*
 		This is heavily inspired by the webhook in
@@ -71,14 +76,14 @@ func main() {
 
 		log.Printf("Created signer using on disk key")
 	} else {
-		switch {
-		case strings.HasPrefix(env.KMSKey, "aws"):
+		switch env.CloudProvider {
+		case cloudProviderAWS:
 			kms := akms.New(akms.Options{})
 			signer, err = awskms.New(ctx, kms, env.KMSKey)
 			if err != nil {
 				log.Panicf("error creating AWS signer: %v", err)
 			}
-		case strings.HasPrefix(env.KMSKey, "gcp"):
+		case cloudProviderGCP:
 			kms, err := gkms.NewKeyManagementClient(ctx)
 			if err != nil {
 				log.Panicf("could not create kms client: %v", err)
@@ -103,9 +108,8 @@ func main() {
 		// TODO: remove this
 		webhookSecrets = append(webhookSecrets, []byte(env.WebhookSecret))
 	} else {
-		// Assuming KMS and secrets manager are on the same cloud
-		switch {
-		case strings.HasPrefix(env.KMSKey, "aws"):
+		switch env.CloudProvider {
+		case cloudProviderAWS:
 			secretmanager := asecretsmanager.New(asecretsmanager.Options{}) // TODO
 			for _, name := range strings.Split(env.WebhookSecret, ",") {
 				resp, err := secretmanager.GetSecretValue(ctx, &asecretsmanager.GetSecretValueInput{
@@ -117,7 +121,7 @@ func main() {
 				// TODO: may be SecretBinary?
 				webhookSecrets = append(webhookSecrets, []byte(*resp.SecretString))
 			}
-		case strings.HasPrefix(env.KMSKey, "gcp"):
+		case cloudProviderGCP:
 			secretmanager, err := gsecretmanager.NewClient(ctx)
 			if err != nil {
 				log.Panicf("could not create secret manager client: %v", err)
