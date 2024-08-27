@@ -1,4 +1,7 @@
-FROM golang:1.22.6@sha256:2bd56f00ff47baf33e64eae7996b65846c7cb5e0a46e0a882ef179fd89654afa AS builder
+FROM alpine:latest AS builder
+
+RUN apk update && apk add go
+
 ENV APP_ROOT=/opt/app-root
 ENV GOPATH=$APP_ROOT
 
@@ -11,7 +14,9 @@ ADD ./ $APP_ROOT/src/
 
 RUN go build -o gittuf-app main.go
 
-FROM chainguard/git:latest-dev AS deploy
+FROM alpine:latest AS deploy
+
+RUN apk update && apk add git openssh
 
 COPY --from=builder /opt/app-root/src/gittuf-app /usr/local/bin/gittuf-app
 
