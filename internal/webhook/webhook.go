@@ -86,15 +86,6 @@ func (g *GittufApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// if err != nil {
 		// 	panic(err)
 		// }
-
-		cmd = exec.Command("ssh-keygen", "-y", "-f", g.Params.AppSigningKey)
-		output, err := cmd.Output()
-		if err != nil {
-			panic(err)
-		}
-		if err := os.WriteFile(g.Params.AppSigningKey+".pub", output, 0o600); err != nil {
-			panic(err)
-		}
 	})
 
 	log.Default().Printf("Serving app...")
