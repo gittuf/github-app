@@ -299,7 +299,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	}
 
 	// Fetch feature ref
-	if err := gitRepo.Fetch("origin", []string{*event.PullRequest.Head.Ref}, true); err != nil {
+	if err := gitRepo.Fetch("origin", []string{"refs/heads/" + *event.PullRequest.Head.Ref}, true); err != nil {
 		log.Default().Print("fetch feature branch: " + err.Error())
 		return err
 	}
