@@ -11,7 +11,7 @@ ADD ./ $APP_ROOT/src/
 
 RUN go build -o gittuf-app main.go
 
-FROM chainguard/git:latest AS deploy
+FROM chainguard/git:latest-dev AS deploy
 
 COPY --from=builder /opt/app-root/src/gittuf-app /usr/local/bin/gittuf-app
 
