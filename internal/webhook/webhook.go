@@ -48,6 +48,7 @@ type EnvConfig struct {
 	AppEmailID         string `envconfig:"APP_EMAIL_ID" required:"true"`
 	DevMode            bool   `envconfig:"DEV_MODE" default:"false"` // in dev mode, we use a key stored on disk
 	CloudProvider      string `envconfig:"CLOUD_PROVIDER" default:"gcp"`
+	AppSigningKey      string `envconfig:"APP_SIGNING_KEY" required:"true"`
 }
 
 type GittufApp struct {
@@ -71,16 +72,28 @@ func (g *GittufApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			panic(err)
 		}
 
-		if g.Params.DevMode {
-			cmd = exec.Command("git", "config", "--global", "user.signingkey", g.Params.KMSKey)
-			if err := cmd.Run(); err != nil {
-				panic(err)
-			}
+		cmd = exec.Command("git", "config", "--global", "user.signingkey", g.Params.KMSKey)
+		if err := cmd.Run(); err != nil {
+			panic(err)
+		}
 
-			cmd = exec.Command("git", "config", "--global", "gpg.format", "ssh")
-			if err := cmd.Run(); err != nil {
-				panic(err)
-			}
+		cmd = exec.Command("git", "config", "--global", "gpg.format", "ssh")
+		if err := cmd.Run(); err != nil {
+			panic(err)
+		}
+
+		// privKeyBytes, err := os.ReadFile(g.Params.AppSigningKey)
+		// if err != nil {
+		// 	panic(err)
+		// }
+
+		cmd = exec.Command("ssh-keygen", "-y", "-f", g.Params.AppSigningKey)
+		output, err := cmd.Output()
+		if err != nil {
+			panic(err)
+		}
+		if err := os.WriteFile(g.Params.AppSigningKey+".pub", output, 0o600); err != nil {
+			panic(err)
 		}
 	})
 
@@ -200,7 +213,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 		return err
 	}
 
-	signer, err := gittuf.LoadSigner(g.Params.KMSKey)
+	signer, err := gittuf.LoadSigner(g.Params.AppSigningKey)
 	if err != nil {
 		return err
 	}
@@ -308,7 +321,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	defer os.Unsetenv("GITHUB_TOKEN")
 	os.Setenv("GITHUB_DEV", "1") // TODO
 
-	signer, err := gittuf.LoadSigner(g.Params.KMSKey)
+	signer, err := gittuf.LoadSigner(g.Params.AppSigningKey)
 	if err != nil {
 		return err
 	}
