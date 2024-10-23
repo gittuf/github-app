@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kms v1.37.2
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.34.2
 	github.com/bradleyfalzon/ghinstallation/v2 v2.11.0
-	github.com/gittuf/gittuf v0.7.1-0.20241023174225-543b0723a683
+	github.com/gittuf/gittuf v0.7.1-0.20241023201836-71f95e2e7f1c
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/go-github/v61 v61.0.0
