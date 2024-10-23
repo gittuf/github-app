@@ -16,3 +16,19 @@ updates:
       prefix: "chore"
       include: "scope"
     open-pull-requests-limit: 10
+  # Monitor GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "14:00"
+    # Bundle updates into one PR
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    open-pull-requests-limit: 10
