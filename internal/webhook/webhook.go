@@ -16,10 +16,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/gittuf/gittuf/experimental/gittuf"
+	rslopts "github.com/gittuf/gittuf/experimental/gittuf/options/rsl"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/google/go-github/v61/github"
@@ -141,6 +143,12 @@ func (g *GittufApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Default().Printf("Event type: %s", reflect.TypeOf(event).String())
 
 	switch event := event.(type) {
+	case *github.PushEvent:
+		if err := g.handlePush(r.Context(), event); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 	case *github.PullRequestEvent:
 		if err := g.handlePullRequest(r.Context(), event); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -180,6 +188,89 @@ func (g *GittufApp) validatePayload(r *http.Request) ([]byte, error) {
 		}
 	}
 	return nil, errors.New("no matching secrets")
+}
+
+func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) error {
+	owner := event.GetRepo().GetOwner().GetLogin()
+	repository := event.GetRepo().GetName()
+	installationID := event.GetInstallation().GetID()
+
+	log.Default().Printf("Push action on %s/%s for reference %s, installation of app %d", owner, repository, *event.Ref, installationID)
+
+	transport := ghinstallation.NewFromAppsTransport(g.Transport, installationID)
+	token, err := transport.Token(ctx)
+	if err != nil {
+		return err
+	}
+
+	cloneURL := *event.Repo.CloneURL
+
+	parsedURL, err := url.Parse(cloneURL)
+	if err != nil {
+		return err
+	}
+	parsedURL.User = url.UserPassword("x-access-token", token)
+	cloneURL = parsedURL.String()
+
+	localDirectory, err := os.MkdirTemp("", "gittuf")
+	if err != nil {
+		return err
+	}
+
+	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL}); err != nil {
+		log.Default().Print("clone: " + err.Error())
+		return err
+	}
+
+	// TODO: might interfere with other instances?
+	os.Setenv("GIT_DIR", filepath.Join(localDirectory, ".git"))
+	defer os.Unsetenv("GIT_DIR")
+
+	os.Setenv("GITTUF_DEV", "1") // TODO
+
+	repo, err := gittuf.LoadRepository()
+	if err != nil {
+		return err
+	}
+	gitRepo := repo.GetGitRepository()
+
+	if err := gitRepo.Fetch("origin", []string{"refs/gittuf/*"}, true); err != nil {
+		log.Default().Print("fetch gittuf and base: " + err.Error())
+		return err
+	}
+
+	switch {
+	case strings.HasPrefix(*event.Ref, "refs/heads"):
+		log.Default().Print("Pushed ref is a branch...")
+		refSpec := fmt.Sprintf("%s:local-ref", *event.Ref)
+		if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
+			log.Default().Print("fetch branch: " + err.Error())
+			return err
+		}
+
+		if err := repo.RecordRSLEntryForReference("local-ref", true, rslopts.WithOverrideRefName(*event.Ref)); err != nil {
+			log.Default().Print("rsl record: " + err.Error())
+			return err
+		}
+	case strings.HasPrefix(*event.Ref, "refs/tags"):
+		refSpec := fmt.Sprintf("%s:%s", *event.Ref, *event.Ref)
+		if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
+			log.Default().Print("fetch tag: " + err.Error())
+			return err
+		}
+
+		if err := repo.RecordRSLEntryForReference(*event.Ref, true); err != nil {
+			log.Default().Print("rsl record: " + err.Error())
+			return err
+		}
+	}
+
+	if err := gitRepo.Push("origin", []string{"refs/gittuf/*"}); err != nil {
+		log.Default().Print("push gittuf: " + err.Error())
+		return err
+	}
+
+	return nil
 }
 
 // handlePullRequest creates an RSL entry when a pull request is merged for the
