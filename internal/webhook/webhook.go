@@ -225,6 +225,9 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	os.Setenv("GIT_DIR", filepath.Join(localDirectory, ".git"))
 	defer os.Unsetenv("GIT_DIR")
 
+	os.Setenv("GITHUB_TOKEN", token) // TODO
+	defer os.Unsetenv("GITHUB_TOKEN")
+
 	os.Setenv("GITTUF_DEV", "1") // TODO
 
 	repo, err := gittuf.LoadRepository()
