@@ -78,13 +78,6 @@ type EnvConfig struct {
 	// AppSigningPubKey indicates the secret used as the public key for the
 	// app's signatures.
 	AppSigningPubKey string `envconfig:"APP_SIGNING_PUBKEY" required:"true"`
-
-	// IDProviderEndpoint identifies the provider for the recorded public key in
-	// the attestation.
-	//
-	// Deprecated: this is being removed with upstream changes so the app
-	// doesn't have to "fake" witnessing a public key.
-	IDProviderEndpoint string `envconfig:"ID_PROVIDER_ENDPOINT" default:"https://github.com/login/oauth"`
 }
 
 type GittufApp struct {
@@ -298,12 +291,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 
 	// Who was the approver?
 	reviewer := event.Review.GetUser()
-	// TODO: don't hardcode this as a sigstore approver right now
-	approver := fmt.Sprintf("fulcio:%s::%s", *reviewer.Login, g.Params.IDProviderEndpoint)
-	approverKey, err := gittuf.LoadPublicKey(approver)
-	if err != nil {
-		return err
-	}
+	reviewerIdentifier := fmt.Sprintf("%s+%d", *reviewer.Login, *reviewer.ID)
 
 	cloneURL := *event.PullRequest.Base.Repo.CloneURL
 
@@ -361,20 +349,20 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	var message string
 	switch *event.Action {
 	case reviewTypeSubmitted:
-		if err := repo.AddGitHubPullRequestApprover(ctx, signer, g.Params.GitHubURL, owner, repository, *event.PullRequest.Number, *event.Review.ID, approverKey, true); err != nil {
+		if err := repo.AddGitHubPullRequestApprover(ctx, signer, g.Params.GitHubURL, owner, repository, *event.PullRequest.Number, *event.Review.ID, reviewerIdentifier, true); err != nil {
 			log.Default().Print("gittuf attest: " + err.Error())
 			return err
 		}
 
-		message = fmt.Sprintf("Observed review from %s, @%s", approver, *reviewer.Login)
+		message = fmt.Sprintf("Observed review from %s (@%s)", reviewerIdentifier, *reviewer.Login)
 
 	case reviewTypeDismissed:
-		if err := repo.DismissGitHubPullRequestApprover(ctx, signer, g.Params.GitHubURL, *event.Review.ID, approverKey, true); err != nil {
+		if err := repo.DismissGitHubPullRequestApprover(ctx, signer, g.Params.GitHubURL, *event.Review.ID, reviewerIdentifier, true); err != nil {
 			log.Default().Print("gittuf attest: " + err.Error())
 			return err
 		}
 
-		message = fmt.Sprintf("Observed dismissal of review by %s", approver)
+		message = fmt.Sprintf("Observed dismissal of review by %s (@%s)", reviewerIdentifier, *reviewer.Login)
 	}
 
 	if err := gitRepo.Push("origin", []string{"refs/gittuf/*"}); err != nil {
