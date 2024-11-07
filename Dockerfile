@@ -1,6 +1,7 @@
 FROM alpine:latest AS builder
 
-RUN apk update && apk add go
+RUN apk update --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community && \
+    apk add --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community go
 
 ENV APP_ROOT=/opt/app-root
 ENV GOPATH=$APP_ROOT
