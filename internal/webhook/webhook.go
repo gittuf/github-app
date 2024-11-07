@@ -218,11 +218,6 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	os.Setenv("GIT_DIR", filepath.Join(localDirectory, ".git"))
 	defer os.Unsetenv("GIT_DIR")
 
-	os.Setenv("GITHUB_TOKEN", token) // TODO
-	defer os.Unsetenv("GITHUB_TOKEN")
-
-	os.Setenv("GITTUF_DEV", "1") // TODO
-
 	repo, err := gittuf.LoadRepository()
 	if err != nil {
 		return err
@@ -238,6 +233,9 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	if err != nil {
 		return err
 	}
+
+	os.Setenv("GITHUB_TOKEN", token) // TODO
+	os.Setenv("GITTUF_DEV", "1")     // TODO
 
 	if err := repo.AddGitHubPullRequestAttestationForCommit(ctx, signer, g.Params.GitHubURL, owner, repository, *event.PullRequest.MergeCommitSHA, *event.PullRequest.Base.Ref, true); err != nil {
 		return err
@@ -336,16 +334,13 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		return err
 	}
 
-	os.Setenv("GITHUB_TOKEN", token) // TODO
-	defer os.Unsetenv("GITHUB_TOKEN")
-
-	os.Setenv("GITTUF_DEV", "1") // TODO
-
 	signer, err := gittuf.LoadSigner(repo, SSHAppSigningKeyPath)
 	if err != nil {
 		return err
 	}
 
+	os.Setenv("GITHUB_TOKEN", token) // TODO
+	os.Setenv("GITTUF_DEV", "1")     // TODO
 	var message string
 	switch *event.Action {
 	case reviewTypeSubmitted:
