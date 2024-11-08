@@ -182,9 +182,9 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	repository := event.GetRepo().GetName()
 	installationID := event.GetInstallation().GetID()
 
-	log.Default().Printf("Action on %s/%s#%d, installation of app %d", owner, repository, *event.PullRequest.Number, installationID)
+	log.Default().Printf("Action on %s/%s#%d, installation of app %d", owner, repository, event.GetPullRequest().GetNumber(), installationID)
 
-	if !*event.PullRequest.Merged {
+	if !event.PullRequest.GetMerged() {
 		// Nothing to do
 		return nil
 	}
@@ -195,7 +195,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 		return err
 	}
 
-	cloneURL := *event.PullRequest.Base.Repo.CloneURL
+	cloneURL := event.GetPullRequest().GetBase().GetRepo().GetCloneURL()
 
 	parsedURL, err := url.Parse(cloneURL)
 	if err != nil {
@@ -209,7 +209,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 		return err
 	}
 
-	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, ReferenceName: plumbing.ReferenceName(*event.PullRequest.Base.Ref)}); err != nil {
+	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, ReferenceName: plumbing.ReferenceName(event.GetPullRequest().GetBase().GetRef())}); err != nil {
 		log.Default().Print("clone: " + err.Error())
 		return err
 	}
@@ -237,11 +237,11 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	os.Setenv("GITHUB_TOKEN", token) // TODO
 	os.Setenv("GITTUF_DEV", "1")     // TODO
 
-	if err := repo.AddGitHubPullRequestAttestationForCommit(ctx, signer, g.Params.GitHubURL, owner, repository, *event.PullRequest.MergeCommitSHA, *event.PullRequest.Base.Ref, true); err != nil {
+	if err := repo.AddGitHubPullRequestAttestationForCommit(ctx, signer, g.Params.GitHubURL, owner, repository, event.GetPullRequest().GetMergeCommitSHA(), event.GetPullRequest().GetBase().GetRef(), true); err != nil {
 		return err
 	}
 
-	if err := repo.RecordRSLEntryForReference(*event.PullRequest.Base.Ref, true); err != nil {
+	if err := repo.RecordRSLEntryForReference(event.GetPullRequest().GetBase().GetRef(), true); err != nil {
 		log.Default().Print("rsl entry creation: " + err.Error())
 		return err
 	}
@@ -264,7 +264,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	repository := event.GetRepo().GetName()
 	installationID := event.GetInstallation().GetID()
 
-	log.Default().Printf("Review on %s/%s#%d, installation of app %d", owner, repository, *event.PullRequest.Number, installationID)
+	log.Default().Printf("Review on %s/%s#%d, installation of app %d", owner, repository, event.GetPullRequest().GetNumber(), installationID)
 
 	transport := ghinstallation.NewFromAppsTransport(g.Transport, installationID)
 	token, err := transport.Token(ctx)
@@ -289,9 +289,9 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 
 	// Who was the approver?
 	reviewer := event.Review.GetUser()
-	reviewerIdentifier := fmt.Sprintf("%s+%d", *reviewer.Login, *reviewer.ID)
+	reviewerIdentifier := fmt.Sprintf("%s+%d", reviewer.GetLogin(), reviewer.GetID())
 
-	cloneURL := *event.PullRequest.Base.Repo.CloneURL
+	cloneURL := event.GetPullRequest().GetBase().GetRepo().GetCloneURL()
 
 	parsedURL, err := url.Parse(cloneURL)
 	if err != nil {
@@ -305,7 +305,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		return err
 	}
 
-	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, ReferenceName: plumbing.ReferenceName(*event.PullRequest.Base.Ref)}); err != nil {
+	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, ReferenceName: plumbing.ReferenceName(event.GetPullRequest().GetBase().GetRef())}); err != nil {
 		log.Default().Print("clone: " + err.Error())
 		return err
 	}
@@ -328,7 +328,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	// Fetch feature ref
 	// We fetch using github's refs/pull/<number>/head ref as the feature ref
 	// may be from a different repository
-	refSpec := fmt.Sprintf("refs/pull/%d/head:refs/heads/%s", *event.PullRequest.Number, *event.PullRequest.Head.Ref)
+	refSpec := fmt.Sprintf("refs/pull/%d/head:refs/heads/%s", event.GetPullRequest().GetNumber(), event.GetPullRequest().GetHead().GetRef())
 	if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
 		log.Default().Print("fetch feature branch: " + err.Error())
 		return err
@@ -342,22 +342,22 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	os.Setenv("GITHUB_TOKEN", token) // TODO
 	os.Setenv("GITTUF_DEV", "1")     // TODO
 	var message string
-	switch *event.Action {
+	switch event.GetAction() {
 	case reviewTypeSubmitted:
-		if err := repo.AddGitHubPullRequestApprover(ctx, signer, g.Params.GitHubURL, owner, repository, *event.PullRequest.Number, *event.Review.ID, reviewerIdentifier, true); err != nil {
+		if err := repo.AddGitHubPullRequestApprover(ctx, signer, g.Params.GitHubURL, owner, repository, event.GetPullRequest().GetNumber(), event.GetReview().GetID(), reviewerIdentifier, true); err != nil {
 			log.Default().Print("gittuf attest: " + err.Error())
 			return err
 		}
 
-		message = fmt.Sprintf("Observed review from %s (@%s)", reviewerIdentifier, *reviewer.Login)
+		message = fmt.Sprintf("Observed review from %s (@%s)", reviewerIdentifier, reviewer.GetLogin())
 
 	case reviewTypeDismissed:
-		if err := repo.DismissGitHubPullRequestApprover(ctx, signer, g.Params.GitHubURL, *event.Review.ID, reviewerIdentifier, true); err != nil {
+		if err := repo.DismissGitHubPullRequestApprover(ctx, signer, g.Params.GitHubURL, event.GetReview().GetID(), reviewerIdentifier, true); err != nil {
 			log.Default().Print("gittuf attest: " + err.Error())
 			return err
 		}
 
-		message = fmt.Sprintf("Observed dismissal of review by %s (@%s)", reviewerIdentifier, *reviewer.Login)
+		message = fmt.Sprintf("Observed dismissal of review by %s (@%s)", reviewerIdentifier, reviewer.GetLogin())
 	}
 
 	if err := gitRepo.Push("origin", []string{"refs/gittuf/*"}); err != nil {
@@ -367,13 +367,13 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 
 	log.Default().Printf("Created message: %s", message)
 
-	commentCreated, response, err := client.Issues.CreateComment(ctx, owner, repository, *event.PullRequest.Number, &github.IssueComment{
+	commentCreated, response, err := client.Issues.CreateComment(ctx, owner, repository, event.GetPullRequest().GetNumber(), &github.IssueComment{
 		Body: &message,
 	})
 	if err != nil {
 		return fmt.Errorf("unable to create GitHub comment: %w", err)
 	} else {
-		log.Printf("Comment created: %s", *commentCreated.Body)
+		log.Printf("Comment created: %s", commentCreated.GetBody())
 		log.Printf("Response: %s", response.Status)
 	}
 
