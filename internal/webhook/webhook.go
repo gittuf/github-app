@@ -344,6 +344,11 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	var message string
 	switch event.GetAction() {
 	case reviewTypeSubmitted:
+		if event.GetReview().GetState() != reviewStateApproved {
+			log.Default().Printf("review submitted by '%s' on PR %s/%s#%d is not for approval", reviewer.GetLogin(), owner, repository, event.GetPullRequest().GetNumber())
+			return nil
+		}
+
 		if err := repo.AddGitHubPullRequestApprover(ctx, signer, g.Params.GitHubURL, owner, repository, event.GetPullRequest().GetNumber(), event.GetReview().GetID(), reviewerIdentifier, true); err != nil {
 			log.Default().Print("gittuf attest: " + err.Error())
 			return err
