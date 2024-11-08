@@ -8,13 +8,13 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kms v1.37.4
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.34.4
 	github.com/bradleyfalzon/ghinstallation/v2 v2.11.0
-	github.com/gittuf/gittuf v0.7.1-0.20241107222253-5d751ffdc030
+	github.com/gittuf/gittuf v0.7.1-0.20241108151245-c02893cd8c2b
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/google/go-github/v61 v61.0.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/octo-sts/app v0.4.2
-	golang.org/x/crypto v0.28.0
+	golang.org/x/crypto v0.29.0
 )
 
 require (
@@ -26,7 +26,7 @@ require (
 	cloud.google.com/go/longrunning v0.6.1 // indirect
 	dario.cat/mergo v1.0.1 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/ProtonMail/go-crypto v1.0.0 // indirect
+	github.com/ProtonMail/go-crypto v1.1.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.32.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.23 // indirect
@@ -147,10 +147,10 @@ require (
 	golang.org/x/mod v0.21.0 // indirect
 	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.26.0 // indirect
-	golang.org/x/term v0.25.0 // indirect
-	golang.org/x/text v0.19.0 // indirect
+	golang.org/x/sync v0.9.0 // indirect
+	golang.org/x/sys v0.27.0 // indirect
+	golang.org/x/term v0.26.0 // indirect
+	golang.org/x/text v0.20.0 // indirect
 	golang.org/x/time v0.7.0 // indirect
 	google.golang.org/api v0.203.0 // indirect
 	google.golang.org/genproto v0.0.0-20241015192408-796eee8c2d53 // indirect
