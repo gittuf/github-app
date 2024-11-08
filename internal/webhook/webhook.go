@@ -97,7 +97,7 @@ func (g *GittufApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			panic(err)
 		}
 
-		cmd = exec.Command("git", "config", "--global", "user.email", g.Params.AppEmailID)
+		cmd = exec.Command("git", "config", "--global", "user.email", g.Params.AppEmailID) //nolint:gosec
 		if err := cmd.Run(); err != nil {
 			panic(err)
 		}
@@ -372,11 +372,10 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	})
 	if err != nil {
 		return fmt.Errorf("unable to create GitHub comment: %w", err)
-	} else {
-		log.Printf("Comment created: %s", commentCreated.GetBody())
-		log.Printf("Response: %s", response.Status)
 	}
 
+	log.Printf("Comment created: %s", commentCreated.GetBody())
+	log.Printf("Response: %s", response.Status)
 	log.Default().Println("Commented!")
 
 	return nil
