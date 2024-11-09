@@ -20,6 +20,7 @@ import (
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/gittuf/gittuf/experimental/gittuf"
+	githubopts "github.com/gittuf/gittuf/experimental/gittuf/options/github"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/google/go-github/v61/github"
@@ -190,14 +191,15 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	}
 
 	transport := ghinstallation.NewFromAppsTransport(g.Transport, installationID)
-	token, err := transport.Token(ctx)
-	if err != nil {
-		return err
-	}
 
 	cloneURL := event.GetPullRequest().GetBase().GetRepo().GetCloneURL()
 
 	parsedURL, err := url.Parse(cloneURL)
+	if err != nil {
+		return err
+	}
+
+	token, err := transport.Token(ctx)
 	if err != nil {
 		return err
 	}
@@ -234,10 +236,15 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 		return err
 	}
 
-	os.Setenv("GITHUB_TOKEN", token) // TODO
-	os.Setenv("GITTUF_DEV", "1")     // TODO
+	os.Setenv("GITTUF_DEV", "1") // TODO
 
-	if err := repo.AddGitHubPullRequestAttestationForCommit(ctx, signer, g.Params.GitHubURL, owner, repository, event.GetPullRequest().GetMergeCommitSHA(), event.GetPullRequest().GetBase().GetRef(), true); err != nil {
+	// Get token again in case it's expired
+	token, err = transport.Token(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := repo.AddGitHubPullRequestAttestationForCommit(ctx, signer, owner, repository, event.GetPullRequest().GetMergeCommitSHA(), event.GetPullRequest().GetBase().GetRef(), true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
 		return err
 	}
 
@@ -267,15 +274,12 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	log.Default().Printf("Review on %s/%s#%d, installation of app %d", owner, repository, event.GetPullRequest().GetNumber(), installationID)
 
 	transport := ghinstallation.NewFromAppsTransport(g.Transport, installationID)
-	token, err := transport.Token(ctx)
-	if err != nil {
-		return err
-	}
 
 	client := github.NewClient(&http.Client{
 		Transport: transport,
 	})
 
+	var err error
 	if g.Params.GitHubURL != DefaultGitHubURL {
 		log.Default().Print("Enterprise instance found, creating enterprise client")
 		log.Default().Printf("Instance url: %s", g.Params.GitHubURL)
@@ -294,6 +298,11 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	cloneURL := event.GetPullRequest().GetBase().GetRepo().GetCloneURL()
 
 	parsedURL, err := url.Parse(cloneURL)
+	if err != nil {
+		return err
+	}
+
+	token, err := transport.Token(ctx)
 	if err != nil {
 		return err
 	}
@@ -339,8 +348,13 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		return err
 	}
 
-	os.Setenv("GITHUB_TOKEN", token) // TODO
-	os.Setenv("GITTUF_DEV", "1")     // TODO
+	// Get token again in case it's expired
+	token, err = transport.Token(ctx)
+	if err != nil {
+		return err
+	}
+
+	os.Setenv("GITTUF_DEV", "1") // TODO
 	var message string
 	switch event.GetAction() {
 	case reviewTypeSubmitted:
@@ -349,7 +363,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 			return nil
 		}
 
-		if err := repo.AddGitHubPullRequestApprover(ctx, signer, g.Params.GitHubURL, owner, repository, event.GetPullRequest().GetNumber(), event.GetReview().GetID(), reviewerIdentifier, true); err != nil {
+		if err := repo.AddGitHubPullRequestApprover(ctx, signer, owner, repository, event.GetPullRequest().GetNumber(), event.GetReview().GetID(), reviewerIdentifier, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
 			log.Default().Print("gittuf attest: " + err.Error())
 			return err
 		}
@@ -357,7 +371,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		message = fmt.Sprintf("Observed review from %s (@%s)", reviewerIdentifier, reviewer.GetLogin())
 
 	case reviewTypeDismissed:
-		if err := repo.DismissGitHubPullRequestApprover(ctx, signer, g.Params.GitHubURL, event.GetReview().GetID(), reviewerIdentifier, true); err != nil {
+		if err := repo.DismissGitHubPullRequestApprover(ctx, signer, event.GetReview().GetID(), reviewerIdentifier, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
 			log.Default().Print("gittuf attest: " + err.Error())
 			return err
 		}
