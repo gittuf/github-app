@@ -193,14 +193,33 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 
 	log.Default().Printf("Push action on %s/%s for reference %s, installation of app %d", owner, repository, event.GetRef(), installationID)
 
-	if event.GetAfter() == gitZeroHash {
+	currentTip := event.GetAfter()
+	if currentTip == gitZeroHash {
 		// this is a deletion, do nothing
 		log.Default().Printf("Push action is to delete ref %s", event.GetRef())
 		return nil
 	}
 
 	transport := ghinstallation.NewFromAppsTransport(g.Transport, installationID)
-	token, err := transport.Token(ctx)
+
+	client, err := getGitHubClient(transport, g.Params.GitHubURL)
+	if err != nil {
+		return err
+	}
+
+	pullRequests, _, err := client.PullRequests.ListPullRequestsWithCommit(ctx, owner, repository, currentTip, nil)
+	if err != nil {
+		return fmt.Errorf("unable to identify pull requests associated with this commit: %w", err)
+	}
+	for _, pullRequest := range pullRequests {
+		if pullRequest.MergedAt != nil && pullRequest.GetBase().GetRef() == event.GetRef() {
+			// we'll handle this via the pull request merge event
+			log.Default().Printf("Found pull request %s/%s#%d for commit %s at ref %s", owner, repository, pullRequest.GetNumber(), currentTip, pullRequest.GetBase().GetRef())
+			return nil
+		}
+	}
+
+	localDirectory, err := os.MkdirTemp("", "gittuf")
 	if err != nil {
 		return err
 	}
@@ -211,13 +230,12 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 	if err != nil {
 		return err
 	}
-	parsedURL.User = url.UserPassword("x-access-token", token)
-	cloneURL = parsedURL.String()
-
-	localDirectory, err := os.MkdirTemp("", "gittuf")
+	token, err := transport.Token(ctx)
 	if err != nil {
 		return err
 	}
+	parsedURL.User = url.UserPassword("x-access-token", token)
+	cloneURL = parsedURL.String()
 
 	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL}); err != nil {
 		log.Default().Print("clone: " + err.Error())
@@ -374,22 +392,6 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 
 	transport := ghinstallation.NewFromAppsTransport(g.Transport, installationID)
 
-	client := github.NewClient(&http.Client{
-		Transport: transport,
-	})
-
-	var err error
-	if g.Params.GitHubURL != DefaultGitHubURL {
-		log.Default().Print("Enterprise instance found, creating enterprise client")
-		log.Default().Printf("Instance url: %s", g.Params.GitHubURL)
-		base := fmt.Sprintf("%s/%s/%s/", g.Params.GitHubURL, "api", "v3")
-		upload := fmt.Sprintf("%s/%s/%s", g.Params.GitHubURL, "api", "uploads")
-		client, err = client.WithEnterpriseURLs(base, upload)
-		if err != nil {
-			return err
-		}
-	}
-
 	// Who was the approver?
 	reviewer := event.Review.GetUser()
 	reviewerIdentifier := fmt.Sprintf("%s+%d", reviewer.GetLogin(), reviewer.GetID())
@@ -485,6 +487,10 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 
 	log.Default().Printf("Created message: %s", message)
 
+	client, err := getGitHubClient(transport, g.Params.GitHubURL)
+	if err != nil {
+		return fmt.Errorf("unable to create GitHub client: %w", err)
+	}
 	commentCreated, response, err := client.Issues.CreateComment(ctx, owner, repository, event.GetPullRequest().GetNumber(), &github.IssueComment{
 		Body: &message,
 	})
@@ -497,4 +503,24 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	log.Default().Println("Commented!")
 
 	return nil
+}
+
+func getGitHubClient(transport *ghinstallation.Transport, githubURL string) (*github.Client, error) {
+	client := github.NewClient(&http.Client{
+		Transport: transport,
+	})
+
+	var err error
+	if githubURL != DefaultGitHubURL {
+		log.Default().Print("Enterprise instance found, creating enterprise client")
+		log.Default().Printf("Instance url: %s", githubURL)
+		base := fmt.Sprintf("%s/%s/%s/", githubURL, "api", "v3")
+		upload := fmt.Sprintf("%s/%s/%s", githubURL, "api", "uploads")
+		client, err = client.WithEnterpriseURLs(base, upload)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return client, nil
 }
