@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kms v1.37.5
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.34.5
 	github.com/bradleyfalzon/ghinstallation/v2 v2.11.0
-	github.com/gittuf/gittuf v0.7.1-0.20241108151245-c02893cd8c2b
+	github.com/gittuf/gittuf v0.7.1-0.20241111161130-d5511b4727f0
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/google/go-github/v61 v61.0.0
@@ -26,7 +26,7 @@ require (
 	cloud.google.com/go/longrunning v0.6.1 // indirect
 	dario.cat/mergo v1.0.1 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/ProtonMail/go-crypto v1.1.1 // indirect
+	github.com/ProtonMail/go-crypto v1.1.2 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.32.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.23 // indirect
