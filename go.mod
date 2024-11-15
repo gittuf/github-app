@@ -7,7 +7,7 @@ require (
 	cloud.google.com/go/secretmanager v1.14.2
 	github.com/aws/aws-sdk-go-v2/service/kms v1.37.5
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.34.5
-	github.com/bradleyfalzon/ghinstallation/v2 v2.11.0
+	github.com/bradleyfalzon/ghinstallation/v2 v2.12.0
 	github.com/gittuf/gittuf v0.7.1-0.20241111161130-d5511b4727f0
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/golang-jwt/jwt/v4 v4.5.1
@@ -70,7 +70,7 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/certificate-transparency-go v1.2.1 // indirect
 	github.com/google/go-containerregistry v0.20.2 // indirect
-	github.com/google/go-github/v62 v62.0.0 // indirect
+	github.com/google/go-github/v66 v66.0.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
 	github.com/google/trillian v1.6.0 // indirect
