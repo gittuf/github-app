@@ -18,6 +18,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/gittuf/gittuf/experimental/gittuf"
@@ -37,6 +38,10 @@ const (
 	reviewStateApproved = "approved"
 	reviewTypeSubmitted = "submitted"
 	reviewTypeDismissed = "dismissed"
+
+	pullRequestActionOpened      = "opened"
+	pullRequestActionSynchronize = "synchronize"
+	pullRequestActionClosed      = "closed"
 
 	gitZeroHash = "0000000000000000000000000000000000000000"
 
@@ -211,12 +216,10 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 	if err != nil {
 		return fmt.Errorf("unable to identify pull requests associated with this commit: %w", err)
 	}
-	for _, pullRequest := range pullRequests {
-		if pullRequest.MergedAt != nil && pullRequest.GetBase().GetRef() == event.GetRef() {
-			// we'll handle this via the pull request merge event
-			log.Default().Printf("Found pull request %s/%s#%d for commit %s at ref %s", owner, repository, pullRequest.GetNumber(), currentTip, pullRequest.GetBase().GetRef())
-			return nil
-		}
+	if len(pullRequests) > 0 {
+		// we'll handle this in the PR merge / synchronize event
+		log.Default().Printf("Found pull request for commit %s", currentTip)
+		return nil
 	}
 
 	localDirectory, err := os.MkdirTemp("", "gittuf")
@@ -302,11 +305,6 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 
 	log.Default().Printf("Action on %s/%s#%d, installation of app %d", owner, repository, event.GetPullRequest().GetNumber(), installationID)
 
-	if !event.PullRequest.GetMerged() {
-		// Nothing to do
-		return nil
-	}
-
 	transport := ghinstallation.NewFromAppsTransport(g.Transport, installationID)
 
 	cloneURL := event.GetPullRequest().GetBase().GetRepo().GetCloneURL()
@@ -348,31 +346,109 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 		return err
 	}
 
-	signer, err := gittuf.LoadSigner(repo, SSHAppSigningKeyPath)
-	if err != nil {
+	refSpec := fmt.Sprintf("refs/pull/%d/head:refs/heads/%s", event.GetPullRequest().GetNumber(), event.GetPullRequest().GetHead().GetRef())
+	if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
+		log.Default().Print("fetch feature branch: " + err.Error())
 		return err
 	}
 
-	os.Setenv("GITTUF_DEV", "1") // TODO
+	switch event.GetAction() {
+	case pullRequestActionClosed:
+		if !event.PullRequest.GetMerged() {
+			// Nothing to do
+			return nil
+		}
 
-	// Get token again in case it's expired
-	token, err = transport.Token(ctx)
-	if err != nil {
-		return err
-	}
+		signer, err := gittuf.LoadSigner(repo, SSHAppSigningKeyPath)
+		if err != nil {
+			return err
+		}
 
-	if err := repo.AddGitHubPullRequestAttestationForCommit(ctx, signer, owner, repository, event.GetPullRequest().GetMergeCommitSHA(), event.GetPullRequest().GetBase().GetRef(), true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
-		return err
-	}
+		os.Setenv("GITTUF_DEV", "1") // TODO
 
-	if err := repo.RecordRSLEntryForReference(event.GetPullRequest().GetBase().GetRef(), true); err != nil {
-		log.Default().Print("rsl entry creation: " + err.Error())
-		return err
-	}
+		// Get token again in case it's expired
+		token, err = transport.Token(ctx)
+		if err != nil {
+			return err
+		}
 
-	if err := gitRepo.Push("origin", []string{"refs/gittuf/*"}); err != nil {
-		log.Default().Print("push gittuf: " + err.Error())
-		return err
+		if err := repo.AddGitHubPullRequestAttestationForCommit(ctx, signer, owner, repository, event.GetPullRequest().GetMergeCommitSHA(), event.GetPullRequest().GetBase().GetRef(), true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
+			return err
+		}
+
+		if err := repo.RecordRSLEntryForReference(event.GetPullRequest().GetBase().GetRef(), true); err != nil {
+			log.Default().Print("rsl entry creation: " + err.Error())
+			return err
+		}
+
+		if err := gitRepo.Push("origin", []string{"refs/gittuf/*"}); err != nil {
+			log.Default().Print("push gittuf: " + err.Error())
+			return err
+		}
+
+	case pullRequestActionOpened, pullRequestActionSynchronize:
+		// Record RSL entry for the branch in question
+
+		if err := repo.RecordRSLEntryForReference(event.GetPullRequest().GetHead().GetRef(), true); err != nil {
+			log.Default().Print("rsl entry creation: " + err.Error())
+			return err
+		}
+
+		if err := gitRepo.Push("origin", []string{"refs/gittuf/*"}); err != nil {
+			log.Default().Print("push gittuf RSL: " + err.Error())
+			return err
+		}
+
+		// fallthrough to handle mergeable check
+		fallthrough
+
+	default:
+		// Add checkrun for other PR actions
+		// TODO: we can likely filter this on specific actions to not overload verification?
+
+		mergeable := false
+		if _, err := repo.VerifyMergeable(ctx, event.GetPullRequest().GetBase().GetRef(), event.GetPullRequest().GetHead().GetRef()); err == nil {
+			// TODO: for now, we're not using the bool return
+			mergeable = true
+		}
+
+		var conclusion, title, summary string
+		if mergeable {
+			conclusion = "success"
+			title = "PR is mergeable!"
+			summary = "Sufficient approvals have been submitted for the PR to be mergeable."
+		} else {
+			conclusion = "failure"
+			title = "PR is not mergeable"
+			summary = "More approvals are necessary for the PR to be mergeable."
+		}
+
+		sha := event.GetPullRequest().GetHead().GetSHA()
+
+		opts := github.CreateCheckRunOptions{
+			Name:        "Verify gittuf policy",
+			HeadSHA:     sha,
+			ExternalID:  github.String(sha),
+			Status:      github.String("completed"),
+			Conclusion:  github.String(conclusion),
+			StartedAt:   &github.Timestamp{Time: time.Now()},
+			CompletedAt: &github.Timestamp{Time: time.Now()},
+			Output: &github.CheckRunOutput{
+				Title:   github.String(title),
+				Summary: github.String(summary),
+			},
+		}
+
+		client, err := getGitHubClient(transport, g.Params.GitHubURL)
+		if err != nil {
+			log.Default().Print("unable to create github client: " + err.Error())
+			return err
+		}
+
+		if _, _, err := client.Checks.CreateCheckRun(ctx, owner, repository, opts); err != nil {
+			log.Default().Print("unable to create check run: " + err.Error())
+			return err
+		}
 	}
 
 	return nil
@@ -501,6 +577,44 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	log.Printf("Comment created: %s", commentCreated.GetBody())
 	log.Printf("Response: %s", response.Status)
 	log.Default().Println("Commented!")
+
+	mergeable := false
+	if _, err := repo.VerifyMergeable(ctx, event.GetPullRequest().GetBase().GetRef(), event.GetPullRequest().GetHead().GetRef()); err == nil {
+		// TODO: for now, we're not using the bool return
+		mergeable = true
+	}
+
+	var conclusion, title, summary string
+	if mergeable {
+		conclusion = "success"
+		title = "PR is mergeable!"
+		summary = "Sufficient approvals have been submitted for the PR to be mergeable."
+	} else {
+		conclusion = "failure"
+		title = "PR is not mergeable"
+		summary = "More approvals are necessary for the PR to be mergeable."
+	}
+
+	sha := event.GetPullRequest().GetHead().GetSHA()
+
+	opts := github.CreateCheckRunOptions{
+		Name:        "Verify gittuf policy",
+		HeadSHA:     sha,
+		ExternalID:  github.String(sha),
+		Status:      github.String("completed"),
+		Conclusion:  github.String(conclusion),
+		StartedAt:   &github.Timestamp{Time: time.Now()},
+		CompletedAt: &github.Timestamp{Time: time.Now()},
+		Output: &github.CheckRunOutput{
+			Title:   github.String(title),
+			Summary: github.String(summary),
+		},
+	}
+
+	if _, _, err := client.Checks.CreateCheckRun(ctx, owner, repository, opts); err != nil {
+		log.Default().Print("unable to create check run: " + err.Error())
+		return err
+	}
 
 	return nil
 }
