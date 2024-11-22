@@ -386,6 +386,75 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 			return err
 		}
 
+		// Re-run check for all open PRs that have the same base branch
+		client, err := getGitHubClient(transport, g.Params.GitHubURL)
+		if err != nil {
+			log.Default().Print("unable to create github client: " + err.Error())
+			return err
+		}
+
+		affectedPullRequests, _, err := client.PullRequests.List(ctx, owner, repository, &github.PullRequestListOptions{
+			State: "open",
+			Base:  event.GetPullRequest().GetBase().GetRef(),
+		})
+		if err != nil {
+			log.Default().Print("unable to get affected pull requests: " + err.Error())
+			return err
+		}
+
+		for _, pullRequest := range affectedPullRequests {
+			refSpec := fmt.Sprintf("refs/pull/%d/head:refs/heads/%s", pullRequest.GetNumber(), pullRequest.GetHead().GetRef())
+			if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
+				log.Default().Print("fetch feature branch: " + err.Error())
+				return err
+			}
+
+			mergeable := false
+			if _, err := repo.VerifyMergeable(ctx, event.GetPullRequest().GetBase().GetRef(), pullRequest.GetHead().GetRef()); err == nil {
+				// TODO: for now, we're not using the bool return
+				mergeable = true
+			}
+
+			var conclusion, title, summary string
+			if mergeable {
+				conclusion = "success"
+				title = "PR is mergeable!"
+				summary = "Sufficient approvals have been submitted for the PR to be mergeable."
+			} else {
+				conclusion = "failure"
+				title = "PR is not mergeable"
+				summary = "More approvals are necessary for the PR to be mergeable."
+			}
+
+			sha := pullRequest.GetHead().GetSHA()
+
+			opts := github.CreateCheckRunOptions{
+				Name:        "Verify gittuf policy",
+				HeadSHA:     sha,
+				ExternalID:  github.String(sha),
+				Status:      github.String("completed"),
+				Conclusion:  github.String(conclusion),
+				StartedAt:   &github.Timestamp{Time: time.Now()},
+				CompletedAt: &github.Timestamp{Time: time.Now()},
+				Output: &github.CheckRunOutput{
+					Title:   github.String(title),
+					Summary: github.String(summary),
+				},
+			}
+
+			if _, _, err := client.Checks.CreateCheckRun(ctx, owner, repository, opts); err != nil {
+				log.Default().Printf("unable to recreate check run for PR %d: %s", pullRequest.GetNumber(), err.Error())
+				return err
+			}
+
+			message := fmt.Sprintf("Base branch %s has been updated to %s, older reviews (if any) do not apply anymore.", pullRequest.GetBase().GetRef(), pullRequest.GetBase().GetSHA())
+			if _, _, err := client.Issues.CreateComment(ctx, owner, repository, pullRequest.GetNumber(), &github.IssueComment{
+				Body: &message,
+			}); err != nil {
+				return fmt.Errorf("unable to create GitHub comment: %w", err)
+			}
+		}
+
 	case pullRequestActionOpened, pullRequestActionSynchronize:
 		// Record RSL entry for the branch in question
 
