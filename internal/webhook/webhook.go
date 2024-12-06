@@ -9,13 +9,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -122,17 +122,23 @@ func (g *GittufApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err := cmd.Run(); err != nil {
 			panic(err)
 		}
+
+		slog.SetDefault(slog.New(slog.NewTextHandler(log.Default().Writer(), &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		})))
 	})
 
 	log.Default().Printf("Serving app...")
+
+	if err := os.Setenv("GITTUF_DEV", "1"); err != nil {
+		panic(err)
+	}
 
 	payload, err := g.validatePayload(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	log.Default().Printf("Validated payload, received: %s", string(payload))
 
 	eventType := github.WebHookType(r)
 	event, err := github.ParseWebHook(eventType, payload)
@@ -141,26 +147,29 @@ func (g *GittufApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Default().Printf("Event type: %s", reflect.TypeOf(event).String())
-
 	switch event := event.(type) {
 	case *github.PushEvent:
+		log.Default().Print("Handling push event...")
 		if err := g.handlePush(r.Context(), event); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 	case *github.PullRequestEvent:
+		log.Default().Print("Handling pull request event...")
 		if err := g.handlePullRequest(r.Context(), event); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 	case *github.PullRequestReviewEvent:
+		log.Default().Print("Handling pull request review event...")
 		if err := g.handlePullRequestReview(r.Context(), event); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+	default:
+		log.Default().Printf("Received event type '%s', not handling event...", eventType)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -194,19 +203,22 @@ func (g *GittufApp) validatePayload(r *http.Request) ([]byte, error) {
 func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) error {
 	owner := event.GetRepo().GetOwner().GetLogin()
 	repository := event.GetRepo().GetName()
-	installationID := event.GetInstallation().GetID()
+	log.Default().Printf("Repository: %s/%s", owner, repository)
 
-	log.Default().Printf("Push action on %s/%s for reference %s, installation of app %d", owner, repository, event.GetRef(), installationID)
+	ref := event.GetRef()
+	log.Default().Printf("Ref: %s", ref)
+
+	installationID := event.GetInstallation().GetID()
+	log.Default().Printf("Installation ID: %d", installationID)
 
 	currentTip := event.GetAfter()
 	if currentTip == gitZeroHash {
 		// this is a deletion, do nothing
-		log.Default().Printf("Push action is to delete ref %s", event.GetRef())
+		log.Default().Print("Push action is to delete ref, nothing else to do")
 		return nil
 	}
 
 	transport := ghinstallation.NewFromAppsTransport(g.Transport, installationID)
-
 	client, err := getGitHubClient(transport, g.Params.GitHubURL)
 	if err != nil {
 		return err
@@ -216,15 +228,11 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 	if err != nil {
 		return fmt.Errorf("unable to identify pull requests associated with this commit: %w", err)
 	}
+	// FIXME: closed pull requests don't get returned here
 	if len(pullRequests) > 0 {
 		// we'll handle this in the PR merge / synchronize event
 		log.Default().Printf("Found pull request for commit %s", currentTip)
 		return nil
-	}
-
-	localDirectory, err := os.MkdirTemp("", "gittuf")
-	if err != nil {
-		return err
 	}
 
 	cloneURL := event.GetRepo().GetCloneURL()
@@ -240,16 +248,18 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 	parsedURL.User = url.UserPassword("x-access-token", token)
 	cloneURL = parsedURL.String()
 
+	localDirectory, err := os.MkdirTemp("", "gittuf")
+	if err != nil {
+		return err
+	}
 	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL}); err != nil {
-		log.Default().Print("clone: " + err.Error())
+		log.Default().Printf("Unable to clone repository: %v", err)
 		return err
 	}
 
 	// TODO: might interfere with other instances?
 	os.Setenv("GIT_DIR", filepath.Join(localDirectory, ".git"))
 	defer os.Unsetenv("GIT_DIR")
-
-	os.Setenv("GITTUF_DEV", "1") // TODO
 
 	repo, err := gittuf.LoadRepository()
 	if err != nil {
@@ -258,38 +268,37 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 	gitRepo := repo.GetGitRepository()
 
 	if err := gitRepo.Fetch("origin", []string{"refs/gittuf/*"}, true); err != nil {
-		log.Default().Print("fetch gittuf and base: " + err.Error())
+		log.Default().Printf("Unable to fetch gittuf refs: %v", err)
 		return err
 	}
 
 	switch {
-	case strings.HasPrefix(event.GetRef(), "refs/heads"):
-		log.Default().Print("Pushed ref is a branch...")
-		refSpec := fmt.Sprintf("%s:refs/gittuf/local-ref", event.GetRef())
+	case strings.HasPrefix(ref, "refs/heads"):
+		refSpec := fmt.Sprintf("%s:refs/gittuf/local-ref", ref)
 		if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
-			log.Default().Print("fetch branch: " + err.Error())
+			log.Default().Printf("Unable to fetch pushed branch: %v", err)
 			return err
 		}
 
-		if err := repo.RecordRSLEntryForReference("refs/gittuf/local-ref", true, rslopts.WithOverrideRefName(event.GetRef())); err != nil {
-			log.Default().Print("rsl record: " + err.Error())
+		if err := repo.RecordRSLEntryForReference("refs/gittuf/local-ref", true, rslopts.WithOverrideRefName(ref)); err != nil {
+			log.Default().Printf("Unable to record RSL entry: %v", err)
 			return err
 		}
-	case strings.HasPrefix(event.GetRef(), "refs/tags"):
-		refSpec := fmt.Sprintf("%s:%s", event.GetRef(), event.GetRef())
+	case strings.HasPrefix(ref, "refs/tags"):
+		refSpec := fmt.Sprintf("%s:%s", ref, ref)
 		if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
-			log.Default().Print("fetch tag: " + err.Error())
+			log.Default().Printf("Unable to fetch tag: %v", err)
 			return err
 		}
 
-		if err := repo.RecordRSLEntryForReference(event.GetRef(), true); err != nil {
-			log.Default().Print("rsl record: " + err.Error())
+		if err := repo.RecordRSLEntryForReference(ref, true); err != nil {
+			log.Default().Printf("Unable to record RSL entry: %v", err)
 			return err
 		}
 	}
 
 	if err := gitRepo.Push("origin", []string{"refs/gittuf/reference-state-log"}); err != nil {
-		log.Default().Print("push gittuf: " + err.Error())
+		log.Default().Printf("Unable to push RSL: %v", err)
 		return err
 	}
 
@@ -301,23 +310,29 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullRequestEvent) error {
 	owner := event.GetRepo().GetOwner().GetLogin()
 	repository := event.GetRepo().GetName()
+	log.Default().Printf("Repository: %s/%s", owner, repository)
+
+	pullRequestNumber := event.GetPullRequest().GetNumber()
+	log.Default().Printf("Pull Request: %d", pullRequestNumber)
+
 	installationID := event.GetInstallation().GetID()
+	log.Default().Printf("Installation ID: %d", installationID)
 
-	log.Default().Printf("Action on %s/%s#%d, installation of app %d", owner, repository, event.GetPullRequest().GetNumber(), installationID)
-
-	transport := ghinstallation.NewFromAppsTransport(g.Transport, installationID)
+	baseRef := event.GetPullRequest().GetBase().GetRef()
+	featureRef := event.GetPullRequest().GetHead().GetRef()
 
 	cloneURL := event.GetPullRequest().GetBase().GetRepo().GetCloneURL()
-
 	parsedURL, err := url.Parse(cloneURL)
 	if err != nil {
 		return err
 	}
 
+	transport := ghinstallation.NewFromAppsTransport(g.Transport, installationID)
 	token, err := transport.Token(ctx)
 	if err != nil {
 		return err
 	}
+
 	parsedURL.User = url.UserPassword("x-access-token", token)
 	cloneURL = parsedURL.String()
 
@@ -325,9 +340,8 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	if err != nil {
 		return err
 	}
-
-	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, ReferenceName: plumbing.ReferenceName(event.GetPullRequest().GetBase().GetRef())}); err != nil {
-		log.Default().Print("clone: " + err.Error())
+	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, ReferenceName: plumbing.ReferenceName(baseRef)}); err != nil {
+		log.Default().Printf("Unable to clone repository: %v", err)
 		return err
 	}
 
@@ -342,13 +356,13 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	gitRepo := repo.GetGitRepository()
 
 	if err := gitRepo.Fetch("origin", []string{"refs/gittuf/*"}, true); err != nil {
-		log.Default().Print("fetch gittuf and base: " + err.Error())
+		log.Default().Printf("Unable to fetch gittuf refs: %v", err)
 		return err
 	}
 
-	refSpec := fmt.Sprintf("refs/pull/%d/head:refs/heads/%s", event.GetPullRequest().GetNumber(), event.GetPullRequest().GetHead().GetRef())
+	refSpec := fmt.Sprintf("refs/pull/%d/head:refs/heads/%s", pullRequestNumber, featureRef)
 	if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
-		log.Default().Print("fetch feature branch: " + err.Error())
+		log.Default().Printf("Unable to fetch feature branch: %v", err)
 		return err
 	}
 
@@ -356,6 +370,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	case pullRequestActionClosed:
 		if !event.PullRequest.GetMerged() {
 			// Nothing to do
+			log.Default().Print("Pull request has not been merged yet, nothing to do")
 			return nil
 		}
 
@@ -364,55 +379,56 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 			return err
 		}
 
-		os.Setenv("GITTUF_DEV", "1") // TODO
-
 		// Get token again in case it's expired
 		token, err = transport.Token(ctx)
 		if err != nil {
 			return err
 		}
 
-		if err := repo.AddGitHubPullRequestAttestationForCommit(ctx, signer, owner, repository, event.GetPullRequest().GetMergeCommitSHA(), event.GetPullRequest().GetBase().GetRef(), true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
+		if err := repo.AddGitHubPullRequestAttestationForCommit(ctx, signer, owner, repository, event.GetPullRequest().GetMergeCommitSHA(), baseRef, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
+			log.Default().Printf("Unable to create pull request attestation: %v", err)
 			return err
 		}
 
-		if err := repo.RecordRSLEntryForReference(event.GetPullRequest().GetBase().GetRef(), true); err != nil {
-			log.Default().Print("rsl entry creation: " + err.Error())
+		if err := repo.RecordRSLEntryForReference(baseRef, true); err != nil {
+			log.Default().Printf("Unable to create RSL entry: %v", err)
 			return err
 		}
 
 		if err := gitRepo.Push("origin", []string{"refs/gittuf/*"}); err != nil {
-			log.Default().Print("push gittuf: " + err.Error())
+			log.Default().Printf("Unable to push gittuf refs: %v", err)
 			return err
 		}
 
 		// Re-run check for all open PRs that have the same base branch
 		client, err := getGitHubClient(transport, g.Params.GitHubURL)
 		if err != nil {
-			log.Default().Print("unable to create github client: " + err.Error())
+			log.Default().Printf("Unable to create GitHub client: %v", err)
 			return err
 		}
 
 		affectedPullRequests, _, err := client.PullRequests.List(ctx, owner, repository, &github.PullRequestListOptions{
 			State: "open",
-			Base:  event.GetPullRequest().GetBase().GetRef(),
+			Base:  baseRef,
 		})
 		if err != nil {
-			log.Default().Print("unable to get affected pull requests: " + err.Error())
+			log.Default().Printf("Unable to get affected pull requests: %v", err)
 			return err
 		}
 
 		for _, pullRequest := range affectedPullRequests {
 			refSpec := fmt.Sprintf("refs/pull/%d/head:refs/heads/%s", pullRequest.GetNumber(), pullRequest.GetHead().GetRef())
 			if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
-				log.Default().Print("fetch feature branch: " + err.Error())
+				log.Default().Printf("Unable to fetch feature branch for affected pull request %d: %v", pullRequest.GetNumber(), err)
 				return err
 			}
 
 			mergeable := false
-			if _, err := repo.VerifyMergeable(ctx, event.GetPullRequest().GetBase().GetRef(), pullRequest.GetHead().GetRef()); err == nil {
+			if _, err := repo.VerifyMergeable(ctx, baseRef, pullRequest.GetHead().GetRef()); err == nil {
 				// TODO: for now, we're not using the bool return
 				mergeable = true
+			} else {
+				log.Default().Printf("VerifyMergeable failed: %v", err)
 			}
 
 			var conclusion, title, summary string
@@ -443,7 +459,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 			}
 
 			if _, _, err := client.Checks.CreateCheckRun(ctx, owner, repository, opts); err != nil {
-				log.Default().Printf("unable to recreate check run for PR %d: %s", pullRequest.GetNumber(), err.Error())
+				log.Default().Printf("Unable to recreate check run for PR %d: %s", pullRequest.GetNumber(), err.Error())
 				return err
 			}
 
@@ -458,13 +474,13 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	case pullRequestActionOpened, pullRequestActionSynchronize:
 		// Record RSL entry for the branch in question
 
-		if err := repo.RecordRSLEntryForReference(event.GetPullRequest().GetHead().GetRef(), true); err != nil {
-			log.Default().Print("rsl entry creation: " + err.Error())
+		if err := repo.RecordRSLEntryForReference(featureRef, true); err != nil {
+			log.Default().Printf("Unable to create RSL entry: %v", err)
 			return err
 		}
 
 		if err := gitRepo.Push("origin", []string{"refs/gittuf/*"}); err != nil {
-			log.Default().Print("push gittuf RSL: " + err.Error())
+			log.Default().Printf("Unable to push RSL: %v", err)
 			return err
 		}
 
@@ -476,9 +492,11 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 		// TODO: we can likely filter this on specific actions to not overload verification?
 
 		mergeable := false
-		if _, err := repo.VerifyMergeable(ctx, event.GetPullRequest().GetBase().GetRef(), event.GetPullRequest().GetHead().GetRef()); err == nil {
+		if _, err := repo.VerifyMergeable(ctx, baseRef, featureRef); err == nil {
 			// TODO: for now, we're not using the bool return
 			mergeable = true
+		} else {
+			log.Default().Printf("VerifyMergeable failed: %v", err)
 		}
 
 		var conclusion, title, summary string
@@ -510,12 +528,12 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 
 		client, err := getGitHubClient(transport, g.Params.GitHubURL)
 		if err != nil {
-			log.Default().Print("unable to create github client: " + err.Error())
+			log.Default().Printf("Unable to create GitHub client: %v", err)
 			return err
 		}
 
 		if _, _, err := client.Checks.CreateCheckRun(ctx, owner, repository, opts); err != nil {
-			log.Default().Print("unable to create check run: " + err.Error())
+			log.Default().Printf("Unable to create check run: %v", err)
 			return err
 		}
 	}
@@ -531,23 +549,28 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.PullRequestReviewEvent) error {
 	owner := event.GetRepo().GetOwner().GetLogin()
 	repository := event.GetRepo().GetName()
+	log.Default().Printf("Repository: %s/%s", owner, repository)
+
+	pullRequestNumber := event.GetPullRequest().GetNumber()
+	log.Default().Printf("Pull Request: %d", pullRequestNumber)
+
 	installationID := event.GetInstallation().GetID()
+	log.Default().Printf("Installation ID: %d", installationID)
 
-	log.Default().Printf("Review on %s/%s#%d, installation of app %d", owner, repository, event.GetPullRequest().GetNumber(), installationID)
-
-	transport := ghinstallation.NewFromAppsTransport(g.Transport, installationID)
+	baseRef := event.GetPullRequest().GetBase().GetRef()
+	featureRef := event.GetPullRequest().GetHead().GetRef()
 
 	// Who was the approver?
 	reviewer := event.Review.GetUser()
 	reviewerIdentifier := fmt.Sprintf("%s+%d", reviewer.GetLogin(), reviewer.GetID())
 
 	cloneURL := event.GetPullRequest().GetBase().GetRepo().GetCloneURL()
-
 	parsedURL, err := url.Parse(cloneURL)
 	if err != nil {
 		return err
 	}
 
+	transport := ghinstallation.NewFromAppsTransport(g.Transport, installationID)
 	token, err := transport.Token(ctx)
 	if err != nil {
 		return err
@@ -559,9 +582,8 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	if err != nil {
 		return err
 	}
-
-	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, ReferenceName: plumbing.ReferenceName(event.GetPullRequest().GetBase().GetRef())}); err != nil {
-		log.Default().Print("clone: " + err.Error())
+	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, ReferenceName: plumbing.ReferenceName(baseRef)}); err != nil {
+		log.Default().Printf("Unable to clone repository: %v", err)
 		return err
 	}
 
@@ -576,16 +598,16 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	gitRepo := repo.GetGitRepository()
 
 	if err := gitRepo.Fetch("origin", []string{"refs/gittuf/*"}, true); err != nil {
-		log.Default().Print("fetch gittuf and base: " + err.Error())
+		log.Default().Printf("Unable to fetch gittuf refs: %v", err)
 		return err
 	}
 
 	// Fetch feature ref
 	// We fetch using github's refs/pull/<number>/head ref as the feature ref
 	// may be from a different repository
-	refSpec := fmt.Sprintf("refs/pull/%d/head:refs/heads/%s", event.GetPullRequest().GetNumber(), event.GetPullRequest().GetHead().GetRef())
+	refSpec := fmt.Sprintf("refs/pull/%d/head:refs/heads/%s", pullRequestNumber, featureRef)
 	if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
-		log.Default().Print("fetch feature branch: " + err.Error())
+		log.Default().Printf("Unable to fetch feature branch: %v", err)
 		return err
 	}
 
@@ -600,17 +622,16 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		return err
 	}
 
-	os.Setenv("GITTUF_DEV", "1") // TODO
 	var message string
 	switch event.GetAction() {
 	case reviewTypeSubmitted:
 		if event.GetReview().GetState() != reviewStateApproved {
-			log.Default().Printf("review submitted by '%s' on PR %s/%s#%d is not for approval", reviewer.GetLogin(), owner, repository, event.GetPullRequest().GetNumber())
+			log.Default().Printf("Review from %s is not approval", reviewer.GetLogin())
 			return nil
 		}
 
-		if err := repo.AddGitHubPullRequestApprover(ctx, signer, owner, repository, event.GetPullRequest().GetNumber(), event.GetReview().GetID(), reviewerIdentifier, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
-			log.Default().Print("gittuf attest: " + err.Error())
+		if err := repo.AddGitHubPullRequestApprover(ctx, signer, owner, repository, pullRequestNumber, event.GetReview().GetID(), reviewerIdentifier, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
+			log.Default().Printf("Unable to create pull request approval attestation: %v", err)
 			return err
 		}
 
@@ -618,7 +639,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 
 	case reviewTypeDismissed:
 		if err := repo.DismissGitHubPullRequestApprover(ctx, signer, event.GetReview().GetID(), reviewerIdentifier, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
-			log.Default().Print("gittuf attest: " + err.Error())
+			log.Default().Printf("Unable to update pull request approval attestation with dismissal: %v", err)
 			return err
 		}
 
@@ -626,31 +647,26 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	}
 
 	if err := gitRepo.Push("origin", []string{"refs/gittuf/*"}); err != nil {
-		log.Default().Print("push gittuf: " + err.Error())
+		log.Default().Printf("Unable to push gittuf refs: %v", err)
 		return err
 	}
-
-	log.Default().Printf("Created message: %s", message)
 
 	client, err := getGitHubClient(transport, g.Params.GitHubURL)
 	if err != nil {
 		return fmt.Errorf("unable to create GitHub client: %w", err)
 	}
-	commentCreated, response, err := client.Issues.CreateComment(ctx, owner, repository, event.GetPullRequest().GetNumber(), &github.IssueComment{
+	if _, _, err := client.Issues.CreateComment(ctx, owner, repository, event.GetPullRequest().GetNumber(), &github.IssueComment{
 		Body: &message,
-	})
-	if err != nil {
+	}); err != nil {
 		return fmt.Errorf("unable to create GitHub comment: %w", err)
 	}
 
-	log.Printf("Comment created: %s", commentCreated.GetBody())
-	log.Printf("Response: %s", response.Status)
-	log.Default().Println("Commented!")
-
 	mergeable := false
-	if _, err := repo.VerifyMergeable(ctx, event.GetPullRequest().GetBase().GetRef(), event.GetPullRequest().GetHead().GetRef()); err == nil {
+	if _, err := repo.VerifyMergeable(ctx, baseRef, featureRef); err == nil {
 		// TODO: for now, we're not using the bool return
 		mergeable = true
+	} else {
+		log.Default().Printf("VerifyMergeable failed: %v", err)
 	}
 
 	var conclusion, title, summary string
@@ -681,7 +697,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	}
 
 	if _, _, err := client.Checks.CreateCheckRun(ctx, owner, repository, opts); err != nil {
-		log.Default().Print("unable to create check run: " + err.Error())
+		log.Default().Printf("Unable to create check run: %v", err)
 		return err
 	}
 
