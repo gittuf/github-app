@@ -228,7 +228,6 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 	if err != nil {
 		return fmt.Errorf("unable to identify pull requests associated with this commit: %w", err)
 	}
-	// FIXME: closed pull requests don't get returned here
 	if len(pullRequests) > 0 {
 		// we'll handle this in the PR merge / synchronize event
 		log.Default().Printf("Found pull request for commit %s", currentTip)
@@ -385,7 +384,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 			return err
 		}
 
-		if err := repo.AddGitHubPullRequestAttestationForCommit(ctx, signer, owner, repository, event.GetPullRequest().GetMergeCommitSHA(), baseRef, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
+		if err := repo.AddGitHubPullRequestAttestationForNumber(ctx, signer, owner, repository, pullRequestNumber, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
 			log.Default().Printf("Unable to create pull request attestation: %v", err)
 			return err
 		}
