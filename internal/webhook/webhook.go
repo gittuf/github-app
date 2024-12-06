@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 	"net/url"
@@ -121,6 +122,10 @@ func (g *GittufApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err := cmd.Run(); err != nil {
 			panic(err)
 		}
+
+		slog.SetDefault(slog.New(slog.NewTextHandler(log.Default().Writer(), &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		})))
 	})
 
 	log.Default().Printf("Serving app...")
