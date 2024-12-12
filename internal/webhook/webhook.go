@@ -458,7 +458,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 				title = "PR is mergeable!"
 				summary = "Sufficient approvals have been submitted for the PR to be mergeable."
 			} else {
-				conclusion = "failure"
+				conclusion = "neutral"
 				title = "PR is not mergeable"
 				summary = "More approvals are necessary for the PR to be mergeable."
 			}
@@ -526,7 +526,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 			title = "PR is mergeable!"
 			summary = "Sufficient approvals have been submitted for the PR to be mergeable."
 		} else {
-			conclusion = "failure"
+			conclusion = "neutral"
 			title = "PR is not mergeable"
 			summary = "More approvals are necessary for the PR to be mergeable."
 		}
@@ -696,7 +696,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		title = "PR is mergeable!"
 		summary = "Sufficient approvals have been submitted for the PR to be mergeable."
 	} else {
-		conclusion = "failure"
+		conclusion = "neutral"
 		title = "PR is not mergeable"
 		summary = "More approvals are necessary for the PR to be mergeable."
 	}
