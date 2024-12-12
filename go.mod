@@ -14,7 +14,7 @@ require (
 	github.com/google/go-github/v61 v61.0.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/octo-sts/app v0.4.2
-	golang.org/x/crypto v0.30.0
+	golang.org/x/crypto v0.31.0
 )
 
 require (
