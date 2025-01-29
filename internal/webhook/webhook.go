@@ -583,7 +583,6 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	log.Default().Printf("Installation ID: %d", installationID)
 
 	baseRef := event.GetPullRequest().GetBase().GetRef()
-	featureRef := event.GetPullRequest().GetHead().GetRef()
 
 	// Who was the approver?
 	reviewer := event.Review.GetUser()
@@ -630,7 +629,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	// Fetch feature ref
 	// We fetch using github's refs/pull/<number>/head ref as the feature ref
 	// may be from a different repository
-	refSpec := fmt.Sprintf("refs/pull/%d/head:refs/heads/%s", pullRequestNumber, featureRef)
+	refSpec := fmt.Sprintf("refs/pull/%d/head:refs/pull/%d/head", pullRequestNumber, pullRequestNumber)
 	if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
 		log.Default().Printf("Unable to fetch feature branch: %v", err)
 		return err
@@ -687,7 +686,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	}
 
 	mergeable := false
-	if _, err := repo.VerifyMergeable(ctx, baseRef, featureRef, verifymergeableopts.WithBypassRSLForFeatureRef()); err == nil {
+	if _, err := repo.VerifyMergeable(ctx, baseRef, fmt.Sprintf("refs/pull/%d/head", pullRequestNumber), verifymergeableopts.WithBypassRSLForFeatureRef()); err == nil {
 		// TODO: for now, we're not using the bool return
 		mergeable = true
 	} else {
