@@ -24,6 +24,7 @@ import (
 	"github.com/gittuf/gittuf/experimental/gittuf"
 	githubopts "github.com/gittuf/gittuf/experimental/gittuf/options/github"
 	rslopts "github.com/gittuf/gittuf/experimental/gittuf/options/rsl"
+	verifymergeableopts "github.com/gittuf/gittuf/experimental/gittuf/options/verifymergeable"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/google/go-github/v61/github"
@@ -381,7 +382,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 		return err
 	}
 
-	refSpec := fmt.Sprintf("refs/pull/%d/head:refs/heads/%s", pullRequestNumber, featureRef)
+	refSpec := fmt.Sprintf("refs/pull/%d/head:refs/pull/%d/head", pullRequestNumber, pullRequestNumber)
 	if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
 		log.Default().Printf("Unable to fetch feature branch: %v", err)
 		return err
@@ -495,14 +496,17 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	case pullRequestActionOpened, pullRequestActionSynchronize:
 		// Record RSL entry for the branch in question
 
-		if err := repo.RecordRSLEntryForReference(featureRef, true); err != nil {
-			log.Default().Printf("Unable to create RSL entry: %v", err)
-			return err
-		}
+		if event.GetPullRequest().GetBase().GetRepo().GetID() == event.GetPullRequest().GetHead().GetRepo().GetID() {
+			// Record push only if head repo is same as base repo
+			if err := repo.RecordRSLEntryForReference(fmt.Sprintf("refs/pull/%d/head", pullRequestNumber), true, rslopts.WithOverrideRefName(featureRef)); err != nil {
+				log.Default().Printf("Unable to create RSL entry: %v", err)
+				return err
+			}
 
-		if err := gitRepo.Push("origin", []string{"refs/gittuf/*"}); err != nil {
-			log.Default().Printf("Unable to push RSL: %v", err)
-			return err
+			if err := gitRepo.Push("origin", []string{"refs/gittuf/*"}); err != nil {
+				log.Default().Printf("Unable to push RSL: %v", err)
+				return err
+			}
 		}
 
 		// fallthrough to handle mergeable check
@@ -513,7 +517,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 		// TODO: we can likely filter this on specific actions to not overload verification?
 
 		mergeable := false
-		if _, err := repo.VerifyMergeable(ctx, baseRef, featureRef); err == nil {
+		if _, err := repo.VerifyMergeable(ctx, baseRef, fmt.Sprintf("refs/pull/%d/head", pullRequestNumber), verifymergeableopts.WithBypassRSLForFeatureRef()); err == nil {
 			// TODO: for now, we're not using the bool return
 			mergeable = true
 		} else {
