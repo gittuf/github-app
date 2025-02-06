@@ -5,8 +5,8 @@ go 1.23.4
 require (
 	cloud.google.com/go/kms v1.20.5
 	cloud.google.com/go/secretmanager v1.14.4
-	github.com/aws/aws-sdk-go-v2/service/kms v1.37.17
-	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.34.17
+	github.com/aws/aws-sdk-go-v2/service/kms v1.37.18
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.34.18
 	github.com/bradleyfalzon/ghinstallation/v2 v2.13.0
 	github.com/gittuf/gittuf v0.8.2-0.20250128225521-cb7f01c22e56
 	github.com/go-git/go-git/v5 v5.13.2
@@ -28,9 +28,9 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.1.5 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.36.0 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.31 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.31 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.36.1 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.32 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.32 // indirect
 	github.com/aws/smithy-go v1.22.2 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/cloudflare/circl v1.5.0 // indirect
