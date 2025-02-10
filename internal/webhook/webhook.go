@@ -285,7 +285,7 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 			return err
 		}
 
-		if err := repo.RecordRSLEntryForReference("refs/gittuf/local-ref", true, rslopts.WithOverrideRefName(ref)); err != nil {
+		if err := repo.RecordRSLEntryForReference(ctx, "refs/gittuf/local-ref", true, rslopts.WithOverrideRefName(ref)); err != nil {
 			log.Default().Printf("Unable to record RSL entry: %v", err)
 			return err
 		}
@@ -296,7 +296,7 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 			return err
 		}
 
-		if err := repo.RecordRSLEntryForReference(ref, true); err != nil {
+		if err := repo.RecordRSLEntryForReference(ctx, ref, true); err != nil {
 			log.Default().Printf("Unable to record RSL entry: %v", err)
 			return err
 		}
@@ -412,7 +412,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 			return err
 		}
 
-		if err := repo.RecordRSLEntryForReference(baseRef, true); err != nil {
+		if err := repo.RecordRSLEntryForReference(ctx, baseRef, true); err != nil {
 			log.Default().Printf("Unable to create RSL entry: %v", err)
 			return err
 		}
@@ -498,7 +498,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 
 		if event.GetPullRequest().GetBase().GetRepo().GetID() == event.GetPullRequest().GetHead().GetRepo().GetID() {
 			// Record push only if head repo is same as base repo
-			if err := repo.RecordRSLEntryForReference(fmt.Sprintf("refs/pull/%d/head", pullRequestNumber), true, rslopts.WithOverrideRefName(featureRef)); err != nil {
+			if err := repo.RecordRSLEntryForReference(ctx, fmt.Sprintf("refs/pull/%d/head", pullRequestNumber), true, rslopts.WithOverrideRefName(featureRef)); err != nil {
 				log.Default().Printf("Unable to create RSL entry: %v", err)
 				return err
 			}
