@@ -1,0 +1,56 @@
+name: Deploy Prod
+
+on:
+  # TODO: deploy automatically when we are confident in this.
+  # push:
+  #   tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch or tag to deploy"
+        required: true
+        default: "main"
+      oci-tag:
+        description: "OCI image tag to publish"
+        required: true
+        default: "latest"
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - id: setup-gcloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: "projects/216981959795/locations/global/workloadIdentityPools/github-idpool/providers/github-provider"
+          service_account: "github-ci@gittuf-451517.iam.gserviceaccount.com"
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ko-build/setup-ko@v0.8
+        env:
+          KO_DOCKER_REPO: us-docker.pkg.dev/gittuf-451517/gittuf
+
+      - name: Build image
+        env:
+          KO_DEFAULTBASEIMAGE: "cgr.dev/chainguard/git:latest"
+        run: |
+          digest=$(ko build .)
+          echo "IMAGE_DIGEST=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy image
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: app
+          image: "${IMAGE_DIGEST}"
