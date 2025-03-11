@@ -8,6 +8,6 @@ This must be run by an admin with permissions on GCP.
 To apply this, run:
 
 ```sh
-gcloud auth application-default-login
+gcloud auth application-default login
 terraform apply
 ```
