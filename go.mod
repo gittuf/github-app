@@ -1,8 +1,6 @@
 module github.com/gittuf/github-app
 
-go 1.23.4
-
-toolchain go1.24.1
+go 1.24.1
 
 require (
 	cloud.google.com/go/kms v1.21.1
