@@ -47,7 +47,7 @@ jobs:
           KO_DEFAULTBASEIMAGE: "cgr.dev/chainguard/git:latest"
         run: |
           digest=$(ko build .)
-          echo "IMAGE_DIGEST=$digest" >> "$GITHUB_OUTPUT"
+          echo "IMAGE_DIGEST=$digest" >> "$GITHUB_ENV"
 
       - name: Deploy image
         run: |
