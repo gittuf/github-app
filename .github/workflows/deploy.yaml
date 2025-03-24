@@ -50,7 +50,10 @@ jobs:
           echo "IMAGE_DIGEST=$digest" >> "$GITHUB_OUTPUT"
 
       - name: Deploy image
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: app
-          image: "${IMAGE_DIGEST}"
+        run: |
+          gcloud run deploy app \
+            --image "${IMAGE_DIGEST}" \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --service-account gittuf-app@gittuf-451517.iam.gserviceaccount.com \
+            --project gittuf-451517
