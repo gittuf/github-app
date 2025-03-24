@@ -30,3 +30,9 @@ resource "google_project_iam_member" "ci-run-developer" {
   role    = "roles/run.developer"
   member  = "serviceAccount:${module.github-ci-gsa.email}"
 }
+
+resource "google_project_iam_member" "ci-artifact-registry-writer" {
+  project = var.project
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${module.github-ci-gsa.email}"
+}
