@@ -8,6 +8,15 @@ resource "google_service_account_iam_member" "service_account_user" {
   member             = "serviceAccount:${module.github-ci-gsa.email}"
 }
 
+resource "google_cloud_run_service_iam_binding" "default" {
+  location = "us-central1"
+  service  = "app"
+  role     = "roles/run.invoker"
+  members = [
+    "allUsers"
+  ]
+}
+
 resource "google_kms_key_ring_iam_member" "key_ring" {
   key_ring_id        = "global/gittuf-github-app"
   role               = "roles/cloudkms.signer"
