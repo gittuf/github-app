@@ -56,4 +56,5 @@ jobs:
             --region us-central1 \
             --allow-unauthenticated \
             --service-account gittuf-app@gittuf-451517.iam.gserviceaccount.com \
-            --project gittuf-451517
+            --project gittuf-451517 \
+            --update-env-vars=APP_EMAIL_ID="179610826+gittuf-app-test[bot]@users.noreply.github.com",KMS_KEY="projects/gittuf-451517/locations/global/keyRings/gittuf-github-app/cryptoKeys/gittuf-github-webhook-key/cryptoKeyVersions/7",GET_USER_SIGNATURE="false",GITHUB_APP_ID="980634",CLOUD_PROVIDER="gcp",GITHUB_WEBHOOK_SECRET="projects/216981959795/secrets/github-webhook-secret/versions/1",APP_SIGNING_KEY="projects/216981959795/secrets/gittuf-app-signing-key/versions/1",APP_SIGNING_PUBKEY="projects/216981959795/secrets/gittuf-app-signing-pubkey/versions/1",GITTUF_DEV="1"
