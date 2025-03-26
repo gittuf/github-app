@@ -46,8 +46,8 @@ const (
 
 	gitZeroHash = "0000000000000000000000000000000000000000"
 
-	DefaultGitHubURL     = "https://github.com"
-	SSHAppSigningKeyPath = "/root/.ssh/key"
+	DefaultGitHubURL = "https://github.com"
+	KeyFileName      = "key"
 )
 
 type EnvConfig struct {
@@ -96,12 +96,17 @@ type GittufApp struct {
 	WebhookSecret [][]byte
 	Params        *EnvConfig
 
-	init sync.Once
+	sshSigningKeyPath string
+	init              sync.Once
 }
 
 func (g *GittufApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	g.init.Do(func() {
-		// TODO: maybe do this in docker file?
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			panic(err)
+		}
+		g.sshSigningKeyPath = filepath.Join(homeDir, ".ssh", KeyFileName)
 
 		cmd := exec.Command("git", "config", "--global", "user.name", "gittuf-github-app")
 		if err := cmd.Run(); err != nil {
@@ -114,7 +119,7 @@ func (g *GittufApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// main.go sets up this key for us
-		cmd = exec.Command("git", "config", "--global", "user.signingkey", SSHAppSigningKeyPath)
+		cmd = exec.Command("git", "config", "--global", "user.signingkey", g.sshSigningKeyPath) //nolint:gosec
 		if err := cmd.Run(); err != nil {
 			panic(err)
 		}
@@ -396,7 +401,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 			return nil
 		}
 
-		signer, err := gittuf.LoadSigner(repo, SSHAppSigningKeyPath)
+		signer, err := gittuf.LoadSigner(repo, g.sshSigningKeyPath)
 		if err != nil {
 			return err
 		}
@@ -635,7 +640,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		return err
 	}
 
-	signer, err := gittuf.LoadSigner(repo, SSHAppSigningKeyPath)
+	signer, err := gittuf.LoadSigner(repo, g.sshSigningKeyPath)
 	if err != nil {
 		return err
 	}

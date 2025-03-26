@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -108,9 +109,14 @@ func main() {
 
 	// Set up app signing key, assuming it's ssh and therefore a secret.
 	// TODO: we should switch this to gitsign
-	if err := os.MkdirAll("/root/.ssh", 0o755); err != nil {
-		log.Panicf("unable to create /root/.ssh: %v", err)
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Panicf("unable to identify user's home directory: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(homeDir, ".ssh"), 0o755); err != nil {
+		log.Panicf("unable to create .ssh directory: %v", err)
+	}
+	privateKeyPath := filepath.Join(homeDir, ".ssh", webhook.KeyFileName)
 
 	webhookSecrets := [][]byte{}
 	if env.DevMode {
@@ -124,7 +130,7 @@ func main() {
 		if err != nil {
 			log.Panicf("error reading app signing key: %v", err)
 		}
-		if err := os.WriteFile(webhook.SSHAppSigningKeyPath, privkeyBytes, 0o600); err != nil {
+		if err := os.WriteFile(privateKeyPath, privkeyBytes, 0o600); err != nil {
 			log.Panicf("error writing app signing key: %v", err)
 		}
 
@@ -132,7 +138,7 @@ func main() {
 		if err != nil {
 			log.Panicf("error reading app public key: %v", err)
 		}
-		pubkeyPath := fmt.Sprintf("%s.pub", webhook.SSHAppSigningKeyPath)
+		pubkeyPath := fmt.Sprintf("%s.pub", privateKeyPath)
 		if err := os.WriteFile(pubkeyPath, pubkeyBytes, 0o600); err != nil {
 			log.Panicf("error writing app public key: %v", err)
 		}
@@ -174,7 +180,7 @@ func main() {
 				log.Panicf("error fetching signing key: %v", err)
 			}
 
-			if err := os.WriteFile(webhook.SSHAppSigningKeyPath, resp.GetPayload().GetData(), 0o600); err != nil {
+			if err := os.WriteFile(privateKeyPath, resp.GetPayload().GetData(), 0o600); err != nil {
 				log.Panicf("unable to write private key; %v", err)
 			}
 
@@ -185,7 +191,7 @@ func main() {
 				log.Panicf("error fetching public key: %v", err)
 			}
 
-			pubkeyPath := fmt.Sprintf("%s.pub", webhook.SSHAppSigningKeyPath)
+			pubkeyPath := fmt.Sprintf("%s.pub", privateKeyPath)
 			if err := os.WriteFile(pubkeyPath, resp.GetPayload().GetData(), 0o600); err != nil {
 				log.Panicf("unable to write public key; %v", err)
 			}
