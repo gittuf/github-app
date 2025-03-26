@@ -11,14 +11,14 @@ resource "google_service_account_iam_member" "service_account_user" {
 resource "google_kms_key_ring_iam_member" "key_ring" {
   key_ring_id        = "global/gittuf-github-app"
   role               = "roles/cloudkms.signer"
-  member             = "serviceAccount:${module.github-ci-gsa.email}"
+  member             = "serviceAccount:${data.google_service_account.github-app-sa.email}"
 }
 
 resource "google_secret_manager_secret_iam_binding" "github_webhook_secret" {
   secret_id = "github-webhook-secret"
   role = "roles/secretmanager.secretAccessor"
   members = [
-    "serviceAccount:${module.github-ci-gsa.email}"
+    "serviceAccount:${data.google_service_account.github-app-sa.email}"
   ]
 }
 
@@ -26,7 +26,7 @@ resource "google_secret_manager_secret_iam_binding" "gittuf_app_signing_key" {
   secret_id = "gittuf-app-signing-key"
   role = "roles/secretmanager.secretAccessor"
   members = [
-    "serviceAccount:${module.github-ci-gsa.email}"
+    "serviceAccount:${data.google_service_account.github-app-sa.email}"
   ]
 }
 
@@ -34,6 +34,6 @@ resource "google_secret_manager_secret_iam_binding" "gittuf_app_signing_pubkey" 
   secret_id = "gittuf-app-signing-pubkey"
   role = "roles/secretmanager.secretAccessor"
   members = [
-    "serviceAccount:${module.github-ci-gsa.email}"
+    "serviceAccount:${data.google_service_account.github-app-sa.email}"
   ]
 }
