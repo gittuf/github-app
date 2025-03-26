@@ -7,3 +7,9 @@ resource "google_service_account_iam_member" "service_account_user" {
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${module.github-ci-gsa.email}"
 }
+
+resource "google_kms_key_ring_iam_member" "key_ring" {
+  key_ring_id        = "global/gittuf-github-app"
+  role               = "roles/cloudkms.signer"
+  member             = "serviceAccount:${module.github-ci-gsa.email}"
+}
