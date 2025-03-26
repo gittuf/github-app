@@ -13,3 +13,27 @@ resource "google_kms_key_ring_iam_member" "key_ring" {
   role               = "roles/cloudkms.signer"
   member             = "serviceAccount:${module.github-ci-gsa.email}"
 }
+
+resource "google_secret_manager_secret_iam_binding" "github_webhook_secret" {
+  secret_id = "github-webhook-secret"
+  role = "roles/secretmanager.secretAccessor"
+  members = [
+    "serviceAccount:${module.github-ci-gsa.email}"
+  ]
+}
+
+resource "google_secret_manager_secret_iam_binding" "gittuf_app_signing_key" {
+  secret_id = "gittuf-app-signing-key"
+  role = "roles/secretmanager.secretAccessor"
+  members = [
+    "serviceAccount:${module.github-ci-gsa.email}"
+  ]
+}
+
+resource "google_secret_manager_secret_iam_binding" "gittuf_app_signing_pubkey" {
+  secret_id = "gittuf-app-signing-pubkey"
+  role = "roles/secretmanager.secretAccessor"
+  members = [
+    "serviceAccount:${module.github-ci-gsa.email}"
+  ]
+}
