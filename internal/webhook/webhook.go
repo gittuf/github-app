@@ -290,7 +290,7 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 			return err
 		}
 
-		if err := repo.RecordRSLEntryForReference(ctx, "refs/gittuf/local-ref", true, rslopts.WithOverrideRefName(ref)); err != nil {
+		if err := repo.RecordRSLEntryForReference(ctx, "refs/gittuf/local-ref", true, rslopts.WithOverrideRefName(ref), rslopts.WithRecordLocalOnly()); err != nil {
 			log.Default().Printf("Unable to record RSL entry: %v", err)
 			return err
 		}
@@ -301,7 +301,7 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 			return err
 		}
 
-		if err := repo.RecordRSLEntryForReference(ctx, ref, true); err != nil {
+		if err := repo.RecordRSLEntryForReference(ctx, ref, true, rslopts.WithRecordLocalOnly()); err != nil {
 			log.Default().Printf("Unable to record RSL entry: %v", err)
 			return err
 		}
@@ -413,12 +413,12 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 			return err
 		}
 
-		if err := repo.AddGitHubPullRequestAttestationForNumber(ctx, signer, owner, repository, pullRequestNumber, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
+		if err := repo.AddGitHubPullRequestAttestationForNumber(ctx, signer, owner, repository, pullRequestNumber, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token), githubopts.WithRSLEntry()); err != nil {
 			log.Default().Printf("Unable to create pull request attestation: %v", err)
 			return err
 		}
 
-		if err := repo.RecordRSLEntryForReference(ctx, baseRef, true); err != nil {
+		if err := repo.RecordRSLEntryForReference(ctx, baseRef, true, rslopts.WithRecordLocalOnly()); err != nil {
 			log.Default().Printf("Unable to create RSL entry: %v", err)
 			return err
 		}
@@ -506,7 +506,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 			// Record push only if head repo is same as base repo
 			absFeatureRef := plumbing.NewBranchReferenceName(featureRef).String()
 			log.Default().Printf("Recording RSL entry for 'refs/pull/%d/head', overridden with ref '%s'...", pullRequestNumber, absFeatureRef)
-			if err := repo.RecordRSLEntryForReference(ctx, fmt.Sprintf("refs/pull/%d/head", pullRequestNumber), true, rslopts.WithOverrideRefName(absFeatureRef)); err != nil {
+			if err := repo.RecordRSLEntryForReference(ctx, fmt.Sprintf("refs/pull/%d/head", pullRequestNumber), true, rslopts.WithOverrideRefName(absFeatureRef), rslopts.WithRecordLocalOnly()); err != nil {
 				log.Default().Printf("Unable to create RSL entry: %v", err)
 				return err
 			}
@@ -662,7 +662,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 			return nil
 		}
 
-		if err := repo.AddGitHubPullRequestApprover(ctx, signer, owner, repository, pullRequestNumber, event.GetReview().GetID(), reviewerIdentifier, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
+		if err := repo.AddGitHubPullRequestApprover(ctx, signer, owner, repository, pullRequestNumber, event.GetReview().GetID(), reviewerIdentifier, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token), githubopts.WithRSLEntry()); err != nil {
 			log.Default().Printf("Unable to create pull request approval attestation: %v", err)
 			return err
 		}
@@ -670,7 +670,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		message = fmt.Sprintf("Observed review from %s (@%s)", reviewerIdentifier, reviewer.GetLogin())
 
 	case reviewTypeDismissed:
-		if err := repo.DismissGitHubPullRequestApprover(ctx, signer, event.GetReview().GetID(), reviewerIdentifier, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token)); err != nil {
+		if err := repo.DismissGitHubPullRequestApprover(ctx, signer, event.GetReview().GetID(), reviewerIdentifier, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token), githubopts.WithRSLEntry()); err != nil {
 			log.Default().Printf("Unable to update pull request approval attestation with dismissal: %v", err)
 			return err
 		}
