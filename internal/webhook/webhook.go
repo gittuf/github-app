@@ -313,6 +313,7 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 	// PRs for the commit in question. We _repeat_ this check at this point to
 	// allow the server to catch up. If this time there are PRs returned, we
 	// don't have to push the RSL entry we just created.
+	log.Default().Printf("Repeating check for pull requests associated with commit '%s'", currentTip)
 	pullRequests, _, err = client.PullRequests.ListPullRequestsWithCommit(ctx, owner, repository, currentTip, nil)
 	if err != nil {
 		return fmt.Errorf("unable to identify pull requests associated with commit '%s': %w", currentTip, err)
@@ -503,7 +504,9 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 
 		if event.GetPullRequest().GetBase().GetRepo().GetID() == event.GetPullRequest().GetHead().GetRepo().GetID() {
 			// Record push only if head repo is same as base repo
-			if err := repo.RecordRSLEntryForReference(ctx, fmt.Sprintf("refs/pull/%d/head", pullRequestNumber), true, rslopts.WithOverrideRefName(featureRef)); err != nil {
+			absFeatureRef := plumbing.NewBranchReferenceName(featureRef).String()
+			log.Default().Printf("Recording RSL entry for 'refs/pull/%d/head', overridden with ref '%s'...", pullRequestNumber, absFeatureRef)
+			if err := repo.RecordRSLEntryForReference(ctx, fmt.Sprintf("refs/pull/%d/head", pullRequestNumber), true, rslopts.WithOverrideRefName(absFeatureRef)); err != nil {
 				log.Default().Printf("Unable to create RSL entry: %v", err)
 				return err
 			}
