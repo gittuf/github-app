@@ -1,19 +1,9 @@
 name: Deploy Prod
 
 on:
-  # TODO: deploy automatically when we are confident in this.
-  # push:
-  #   tags: ["v*"]
+  push:
+    branches: ["main"]
   workflow_dispatch:
-    inputs:
-      ref:
-        description: "Branch or tag to deploy"
-        required: true
-        default: "main"
-      oci-tag:
-        description: "OCI image tag to publish"
-        required: true
-        default: "latest"
 
 concurrency:
   group: release
