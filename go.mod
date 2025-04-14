@@ -5,11 +5,11 @@ go 1.24.1
 require (
 	cloud.google.com/go/kms v1.21.1
 	cloud.google.com/go/secretmanager v1.14.6
-	github.com/aws/aws-sdk-go-v2/service/kms v1.38.2
+	github.com/aws/aws-sdk-go-v2/service/kms v1.38.3
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.35.3
 	github.com/bradleyfalzon/ghinstallation/v2 v2.14.0
 	github.com/gittuf/gittuf v0.9.1-0.20250327170552-8464c526097e
-	github.com/go-git/go-git/v5 v5.14.0
+	github.com/go-git/go-git/v5 v5.15.0
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/go-github/v61 v61.0.0
 	github.com/kelseyhightower/envconfig v1.4.0
@@ -33,7 +33,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.34 // indirect
 	github.com/aws/smithy-go v1.22.2 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
-	github.com/cloudflare/circl v1.6.0 // indirect
+	github.com/cloudflare/circl v1.6.1 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.16.3 // indirect
 	github.com/coreos/go-oidc/v3 v3.12.0 // indirect
 	github.com/cyberphone/json-canonicalization v0.0.0-20241213102144-19d51d7fe467 // indirect
@@ -144,7 +144,7 @@ require (
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67 // indirect
 	golang.org/x/mod v0.22.0 // indirect
-	golang.org/x/net v0.37.0 // indirect
+	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sync v0.13.0 // indirect
 	golang.org/x/sys v0.32.0 // indirect
