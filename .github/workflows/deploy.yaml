@@ -38,7 +38,7 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - uses: ko-build/setup-ko@v0.8
+      - uses: ko-build/setup-ko@v0.9
         env:
           KO_DOCKER_REPO: us-docker.pkg.dev/gittuf-451517/gittuf
 
