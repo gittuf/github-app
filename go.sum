@@ -222,8 +222,8 @@ github.com/fsnotify/fsnotify v1.8.0 h1:dAwr6QBTBZIkG8roQaJjGof0pp0EeF+tNV7YBP3F/
 github.com/fsnotify/fsnotify v1.8.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/github/smimesign v0.2.0 h1:Hho4YcX5N1I9XNqhq0fNx0Sts8MhLonHd+HRXVGNjvk=
 github.com/github/smimesign v0.2.0/go.mod h1:iZiiwNT4HbtGRVqCQu7uJPEZCuEE5sfSSttcnePkDl4=
-github.com/gittuf/gittuf v0.9.1-0.20250327170552-8464c526097e h1:LLJBBb6xMXICCt1y2F1IBatlpvL5EmOjxHAjJutmM5U=
-github.com/gittuf/gittuf v0.9.1-0.20250327170552-8464c526097e/go.mod h1:/XI3i/5LM23HsGuxBdEe3/KHkzDV/EqS5lw3qv264aw=
+github.com/gittuf/gittuf v0.9.1-0.20250423164337-a13cab16fff2 h1:B+KD5OuzGKji1M52eQ11Ge+rq2Riy4Wpwl0htRVCdZ8=
+github.com/gittuf/gittuf v0.9.1-0.20250423164337-a13cab16fff2/go.mod h1:BYccSup4ZKCAsLT0KctMMGRVdWTpdszgjcQny3a/y1E=
 github.com/gliderlabs/ssh v0.3.8 h1:a4YXD1V7xMF9g5nTkdfnja3Sxy1PVDCj1Zg4Wb8vY6c=
 github.com/gliderlabs/ssh v0.3.8/go.mod h1:xYoytBv1sV0aL3CavoDuJIQNURXkkfPA/wxQ1pL1fAU=
 github.com/go-chi/chi v4.1.2+incompatible h1:fGFk2Gmi/YKXk0OmGfBh0WgmN3XB8lVnEyNz34tQRec=
@@ -534,8 +534,8 @@ github.com/sigstore/fulcio v1.6.5 h1:A9DtV2hmeJ835mtqqxgvV0Sie0HOPKaLPgvFVF4FU7c
 github.com/sigstore/fulcio v1.6.5/go.mod h1:wUei0BMnlz5iY10keKAx5FXFGnMX0N25ZSe4jGRA65M=
 github.com/sigstore/gitsign v0.12.0 h1:tdSrYKhhEn1hh14yZ8f63GC61MzxGjYc/e4SmvFZCtE=
 github.com/sigstore/gitsign v0.12.0/go.mod h1:eE5Y3g1rorXrii6H5M74dTfvtbrC/lVBFUAXRFpcvVQ=
-github.com/sigstore/protobuf-specs v0.4.0 h1:yoZbdh0kZYKOSiVbYyA8J3f2wLh5aUk2SQB7LgAfIdU=
-github.com/sigstore/protobuf-specs v0.4.0/go.mod h1:FKW5NYhnnFQ/Vb9RKtQk91iYd0MKJ9AxyqInEwU6+OI=
+github.com/sigstore/protobuf-specs v0.4.1 h1:5SsMqZbdkcO/DNHudaxuCUEjj6x29tS2Xby1BxGU7Zc=
+github.com/sigstore/protobuf-specs v0.4.1/go.mod h1:+gXR+38nIa2oEupqDdzg4qSBT0Os+sP7oYv6alWewWc=
 github.com/sigstore/rekor v1.3.7 h1:Z5UW5TmqbTZnyOFkMRfi32q/CWcxK6VuzIkx+33mbq8=
 github.com/sigstore/rekor v1.3.7/go.mod h1:TihqJscZ6L6398x68EHY82t0AOnGYfrQ0siXe3WgbR4=
 github.com/sigstore/sigstore v1.9.1 h1:bNMsfFATsMPaagcf+uppLk4C9rQZ2dh5ysmCxQBYWaw=
@@ -629,6 +629,8 @@ github.com/ysmood/leakless v0.9.0 h1:qxCG5VirSBvmi3uynXFkcnLMzkphdh3xx5FtrORwDCU
 github.com/ysmood/leakless v0.9.0/go.mod h1:R8iAXPRaG97QJwqxs74RdwzcRHT1SWCGTNqY8q0JvMQ=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
+github.com/yuin/gopher-lua v1.1.1 h1:kYKnWBjvbNP4XLT3+bPEwAXJx262OhaHDWDVOPjL46M=
+github.com/yuin/gopher-lua v1.1.1/go.mod h1:GBR0iDaNXjAgGg9zfCvksxSRnQx76gclCIb7kdAd1Pw=
 github.com/zalando/go-keyring v0.2.3 h1:v9CUu9phlABObO4LPWycf+zwMG7nlbb3t/B5wa97yms=
 github.com/zalando/go-keyring v0.2.3/go.mod h1:HL4k+OXQfJUWaMnqyuSOc0drfGPX2b51Du6K+MRgZMk=
 github.com/zeebo/errs v1.3.0 h1:hmiaKqgYZzcVgRL1Vkc1Mn2914BbzB0IBxs+ebeutGs=

@@ -267,11 +267,7 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 		return err
 	}
 
-	// TODO: might interfere with other instances?
-	os.Setenv("GIT_DIR", filepath.Join(localDirectory, ".git"))
-	defer os.Unsetenv("GIT_DIR")
-
-	repo, err := gittuf.LoadRepository()
+	repo, err := gittuf.LoadRepository(localDirectory)
 	if err != nil {
 		return err
 	}
@@ -373,11 +369,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 		return err
 	}
 
-	// TODO: might interfere with other instances?
-	os.Setenv("GIT_DIR", filepath.Join(localDirectory, ".git"))
-	defer os.Unsetenv("GIT_DIR")
-
-	repo, err := gittuf.LoadRepository()
+	repo, err := gittuf.LoadRepository(localDirectory)
 	if err != nil {
 		return err
 	}
@@ -619,11 +611,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		return err
 	}
 
-	// TODO: might interfere with other instances?
-	os.Setenv("GIT_DIR", filepath.Join(localDirectory, ".git"))
-	defer os.Unsetenv("GIT_DIR")
-
-	repo, err := gittuf.LoadRepository()
+	repo, err := gittuf.LoadRepository(localDirectory)
 	if err != nil {
 		return err
 	}
