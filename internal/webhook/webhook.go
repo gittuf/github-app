@@ -89,6 +89,11 @@ type EnvConfig struct {
 	// AppSigningPubKey indicates the secret used as the public key for the
 	// app's signatures.
 	AppSigningPubKey string `envconfig:"APP_SIGNING_PUBKEY" required:"true"`
+
+	// CommentOnAffectedPRs indicates whether the app should post a comment
+	// on PRs where prior approvals do not hold when the base branch is
+	// affected by a push or a merge.
+	CommentOnAffectedPRs bool `envconfig:"COMMENT_ON_AFFECTED_PRS" default:"false"`
 }
 
 type GittufApp struct {
@@ -483,11 +488,13 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 				return err
 			}
 
-			message := fmt.Sprintf("Base branch %s has been updated to %s, older reviews (if any) do not apply anymore.", pullRequest.GetBase().GetRef(), pullRequest.GetBase().GetSHA())
-			if _, _, err := client.Issues.CreateComment(ctx, owner, repository, pullRequest.GetNumber(), &github.IssueComment{
-				Body: &message,
-			}); err != nil {
-				return fmt.Errorf("unable to create GitHub comment: %w", err)
+			if g.Params.CommentOnAffectedPRs {
+				message := fmt.Sprintf("Base branch %s has been updated to %s, older reviews (if any) do not apply anymore.", pullRequest.GetBase().GetRef(), pullRequest.GetBase().GetSHA())
+				if _, _, err := client.Issues.CreateComment(ctx, owner, repository, pullRequest.GetNumber(), &github.IssueComment{
+					Body: &message,
+				}); err != nil {
+					return fmt.Errorf("unable to create GitHub comment: %w", err)
+				}
 			}
 		}
 
