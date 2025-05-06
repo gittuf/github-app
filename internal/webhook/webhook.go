@@ -488,20 +488,6 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 				return err
 			}
 
-			reviews, _, err := client.PullRequests.ListReviews(ctx, owner, repository, pullRequest.GetNumber(), nil) // TODO: paginate
-			if err != nil {
-				log.Default().Printf("Unable to fetch reviews on PR #%d: %v", pullRequest.GetNumber(), err)
-				return err
-			}
-
-			message := "dismissing approval as base branch has moved"
-			for _, review := range reviews {
-				if _, _, err := client.PullRequests.DismissReview(ctx, owner, repository, pullRequest.GetNumber(), review.GetID(), &github.PullRequestReviewDismissalRequest{Message: &message}); err != nil {
-					log.Default().Printf("Unable to dismiss review %d on #%d: %v", review.GetID(), pullRequest.GetNumber(), err)
-					return err
-				}
-			}
-
 			if g.Params.CommentOnAffectedPRs {
 				message := fmt.Sprintf("Base branch %s has been updated to %s, older reviews (if any) do not apply anymore.", pullRequest.GetBase().GetRef(), pullRequest.GetBase().GetSHA())
 				if _, _, err := client.Issues.CreateComment(ctx, owner, repository, pullRequest.GetNumber(), &github.IssueComment{
