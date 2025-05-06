@@ -494,8 +494,9 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 				return err
 			}
 
+			message := "dismissing approval as base branch has moved"
 			for _, review := range reviews {
-				if _, _, err := client.PullRequests.DismissReview(ctx, owner, repository, pullRequest.GetNumber(), review.GetID(), &github.PullRequestReviewDismissalRequest{}); err != nil { // TODO: message
+				if _, _, err := client.PullRequests.DismissReview(ctx, owner, repository, pullRequest.GetNumber(), review.GetID(), &github.PullRequestReviewDismissalRequest{Message: &message}); err != nil {
 					log.Default().Printf("Unable to dismiss review %d on #%d: %v", review.GetID(), pullRequest.GetNumber(), err)
 					return err
 				}
