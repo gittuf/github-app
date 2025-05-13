@@ -29,6 +29,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.events.inputs.ref }}
 
       - id: setup-gcloud
         uses: google-github-actions/auth@v2
