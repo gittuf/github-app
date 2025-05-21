@@ -20,7 +20,7 @@ module "github-ci-gsa" {
 
   repository   = "gittuf/github-app"
   refspec      = "refs/heads/main"
-  workflow_ref = ".github/workflows/deploy.yaml"
+  workflow_ref = ".github/workflows/deploy.yml"
 
   notification_channels = []
 }
