@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kms v1.38.3
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.35.4
 	github.com/bradleyfalzon/ghinstallation/v2 v2.15.0
-	github.com/gittuf/gittuf v0.10.0
+	github.com/gittuf/gittuf v0.10.1
 	github.com/go-git/go-git/v5 v5.16.0
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/go-github/v61 v61.0.0
@@ -111,7 +111,7 @@ require (
 	github.com/shibumi/go-pathspec v1.3.0 // indirect
 	github.com/sigstore/cosign/v2 v2.4.1 // indirect
 	github.com/sigstore/gitsign v0.12.0 // indirect
-	github.com/sigstore/protobuf-specs v0.4.1 // indirect
+	github.com/sigstore/protobuf-specs v0.4.2 // indirect
 	github.com/sigstore/rekor v1.3.7 // indirect
 	github.com/sigstore/sigstore v1.9.1 // indirect
 	github.com/sigstore/sigstore-go v0.6.2 // indirect

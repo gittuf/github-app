@@ -425,75 +425,82 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 			return err
 		}
 
-		// Re-run check for all open PRs that have the same base branch
-		client, err := getGitHubClient(transport, g.Params.GitHubURL)
+		hasPolicy, err := repo.HasPolicy()
 		if err != nil {
-			log.Default().Printf("Unable to create GitHub client: %v", err)
+			log.Default().Printf("Unable to check if policy exists: %v", err)
 			return err
 		}
-
-		affectedPullRequests, _, err := client.PullRequests.List(ctx, owner, repository, &github.PullRequestListOptions{
-			State: "open",
-			Base:  baseRef,
-		})
-		if err != nil {
-			log.Default().Printf("Unable to get affected pull requests: %v", err)
-			return err
-		}
-
-		for _, pullRequest := range affectedPullRequests {
-			refSpec := fmt.Sprintf("refs/pull/%d/head:refs/pull/%d/head", pullRequest.GetNumber(), pullRequest.GetNumber())
-			if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
-				log.Default().Printf("Unable to fetch feature branch for affected pull request %d: %v", pullRequest.GetNumber(), err)
+		if hasPolicy {
+			// Re-run check for all open PRs that have the same base branch
+			client, err := getGitHubClient(transport, g.Params.GitHubURL)
+			if err != nil {
+				log.Default().Printf("Unable to create GitHub client: %v", err)
 				return err
 			}
 
-			mergeable := false
-			if _, err := repo.VerifyMergeable(ctx, baseRef, fmt.Sprintf("refs/pull/%d/head", pullRequest.GetNumber()), verifymergeableopts.WithBypassRSLForFeatureRef()); err == nil {
-				// TODO: for now, we're not using the bool return
-				mergeable = true
-			} else {
-				log.Default().Printf("VerifyMergeable failed: %v", err)
-			}
-
-			var conclusion, title, summary string
-			if mergeable {
-				conclusion = "success"
-				title = "PR is mergeable!"
-				summary = "Sufficient approvals have been submitted for the PR to be mergeable."
-			} else {
-				conclusion = "neutral"
-				title = "PR is not mergeable"
-				summary = "More approvals are necessary for the PR to be mergeable."
-			}
-
-			sha := pullRequest.GetHead().GetSHA()
-
-			opts := github.CreateCheckRunOptions{
-				Name:        "Verify gittuf policy",
-				HeadSHA:     sha,
-				ExternalID:  github.String(sha),
-				Status:      github.String("completed"),
-				Conclusion:  github.String(conclusion),
-				StartedAt:   &github.Timestamp{Time: time.Now()},
-				CompletedAt: &github.Timestamp{Time: time.Now()},
-				Output: &github.CheckRunOutput{
-					Title:   github.String(title),
-					Summary: github.String(summary),
-				},
-			}
-
-			if _, _, err := client.Checks.CreateCheckRun(ctx, owner, repository, opts); err != nil {
-				log.Default().Printf("Unable to recreate check run for PR %d: %s", pullRequest.GetNumber(), err.Error())
+			affectedPullRequests, _, err := client.PullRequests.List(ctx, owner, repository, &github.PullRequestListOptions{
+				State: "open",
+				Base:  baseRef,
+			})
+			if err != nil {
+				log.Default().Printf("Unable to get affected pull requests: %v", err)
 				return err
 			}
 
-			if g.Params.CommentOnAffectedPRs {
-				message := fmt.Sprintf("Base branch %s has been updated to %s, older reviews (if any) do not apply anymore.", pullRequest.GetBase().GetRef(), pullRequest.GetBase().GetSHA())
-				if _, _, err := client.Issues.CreateComment(ctx, owner, repository, pullRequest.GetNumber(), &github.IssueComment{
-					Body: &message,
-				}); err != nil {
-					return fmt.Errorf("unable to create GitHub comment: %w", err)
+			for _, pullRequest := range affectedPullRequests {
+				refSpec := fmt.Sprintf("refs/pull/%d/head:refs/pull/%d/head", pullRequest.GetNumber(), pullRequest.GetNumber())
+				if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
+					log.Default().Printf("Unable to fetch feature branch for affected pull request %d: %v", pullRequest.GetNumber(), err)
+					return err
+				}
+
+				mergeable := false
+				if _, err := repo.VerifyMergeable(ctx, baseRef, fmt.Sprintf("refs/pull/%d/head", pullRequest.GetNumber()), verifymergeableopts.WithBypassRSLForFeatureRef()); err == nil {
+					// TODO: for now, we're not using the bool return
+					mergeable = true
+				} else {
+					log.Default().Printf("VerifyMergeable failed: %v", err)
+				}
+
+				var conclusion, title, summary string
+				if mergeable {
+					conclusion = "success"
+					title = "PR is mergeable!"
+					summary = "Sufficient approvals have been submitted for the PR to be mergeable."
+				} else {
+					conclusion = "neutral"
+					title = "PR is not mergeable"
+					summary = "More approvals are necessary for the PR to be mergeable."
+				}
+
+				sha := pullRequest.GetHead().GetSHA()
+
+				opts := github.CreateCheckRunOptions{
+					Name:        "Verify gittuf policy",
+					HeadSHA:     sha,
+					ExternalID:  github.String(sha),
+					Status:      github.String("completed"),
+					Conclusion:  github.String(conclusion),
+					StartedAt:   &github.Timestamp{Time: time.Now()},
+					CompletedAt: &github.Timestamp{Time: time.Now()},
+					Output: &github.CheckRunOutput{
+						Title:   github.String(title),
+						Summary: github.String(summary),
+					},
+				}
+
+				if _, _, err := client.Checks.CreateCheckRun(ctx, owner, repository, opts); err != nil {
+					log.Default().Printf("Unable to recreate check run for PR %d: %s", pullRequest.GetNumber(), err.Error())
+					return err
+				}
+
+				if g.Params.CommentOnAffectedPRs {
+					message := fmt.Sprintf("Base branch %s has been updated to %s, older reviews (if any) do not apply anymore.", pullRequest.GetBase().GetRef(), pullRequest.GetBase().GetSHA())
+					if _, _, err := client.Issues.CreateComment(ctx, owner, repository, pullRequest.GetNumber(), &github.IssueComment{
+						Body: &message,
+					}); err != nil {
+						return fmt.Errorf("unable to create GitHub comment: %w", err)
+					}
 				}
 			}
 		}
@@ -523,50 +530,57 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 		// Add checkrun for other PR actions
 		// TODO: we can likely filter this on specific actions to not overload verification?
 
-		mergeable := false
-		if _, err := repo.VerifyMergeable(ctx, baseRef, fmt.Sprintf("refs/pull/%d/head", pullRequestNumber), verifymergeableopts.WithBypassRSLForFeatureRef()); err == nil {
-			// TODO: for now, we're not using the bool return
-			mergeable = true
-		} else {
-			log.Default().Printf("VerifyMergeable failed: %v", err)
-		}
-
-		var conclusion, title, summary string
-		if mergeable {
-			conclusion = "success"
-			title = "PR is mergeable!"
-			summary = "Sufficient approvals have been submitted for the PR to be mergeable."
-		} else {
-			conclusion = "neutral"
-			title = "PR is not mergeable"
-			summary = "More approvals are necessary for the PR to be mergeable."
-		}
-
-		sha := event.GetPullRequest().GetHead().GetSHA()
-
-		opts := github.CreateCheckRunOptions{
-			Name:        "Verify gittuf policy",
-			HeadSHA:     sha,
-			ExternalID:  github.String(sha),
-			Status:      github.String("completed"),
-			Conclusion:  github.String(conclusion),
-			StartedAt:   &github.Timestamp{Time: time.Now()},
-			CompletedAt: &github.Timestamp{Time: time.Now()},
-			Output: &github.CheckRunOutput{
-				Title:   github.String(title),
-				Summary: github.String(summary),
-			},
-		}
-
-		client, err := getGitHubClient(transport, g.Params.GitHubURL)
+		hasPolicy, err := repo.HasPolicy()
 		if err != nil {
-			log.Default().Printf("Unable to create GitHub client: %v", err)
+			log.Default().Printf("Unable to check if policy exists: %v", err)
 			return err
 		}
+		if hasPolicy {
+			mergeable := false
+			if _, err := repo.VerifyMergeable(ctx, baseRef, fmt.Sprintf("refs/pull/%d/head", pullRequestNumber), verifymergeableopts.WithBypassRSLForFeatureRef()); err == nil {
+				// TODO: for now, we're not using the bool return
+				mergeable = true
+			} else {
+				log.Default().Printf("VerifyMergeable failed: %v", err)
+			}
 
-		if _, _, err := client.Checks.CreateCheckRun(ctx, owner, repository, opts); err != nil {
-			log.Default().Printf("Unable to create check run: %v", err)
-			return err
+			var conclusion, title, summary string
+			if mergeable {
+				conclusion = "success"
+				title = "PR is mergeable!"
+				summary = "Sufficient approvals have been submitted for the PR to be mergeable."
+			} else {
+				conclusion = "neutral"
+				title = "PR is not mergeable"
+				summary = "More approvals are necessary for the PR to be mergeable."
+			}
+
+			sha := event.GetPullRequest().GetHead().GetSHA()
+
+			opts := github.CreateCheckRunOptions{
+				Name:        "Verify gittuf policy",
+				HeadSHA:     sha,
+				ExternalID:  github.String(sha),
+				Status:      github.String("completed"),
+				Conclusion:  github.String(conclusion),
+				StartedAt:   &github.Timestamp{Time: time.Now()},
+				CompletedAt: &github.Timestamp{Time: time.Now()},
+				Output: &github.CheckRunOutput{
+					Title:   github.String(title),
+					Summary: github.String(summary),
+				},
+			}
+
+			client, err := getGitHubClient(transport, g.Params.GitHubURL)
+			if err != nil {
+				log.Default().Printf("Unable to create GitHub client: %v", err)
+				return err
+			}
+
+			if _, _, err := client.Checks.CreateCheckRun(ctx, owner, repository, opts); err != nil {
+				log.Default().Printf("Unable to create check run: %v", err)
+				return err
+			}
 		}
 	}
 
@@ -688,44 +702,51 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		return fmt.Errorf("unable to create GitHub comment: %w", err)
 	}
 
-	mergeable := false
-	if _, err := repo.VerifyMergeable(ctx, baseRef, fmt.Sprintf("refs/pull/%d/head", pullRequestNumber), verifymergeableopts.WithBypassRSLForFeatureRef()); err == nil {
-		// TODO: for now, we're not using the bool return
-		mergeable = true
-	} else {
-		log.Default().Printf("VerifyMergeable failed: %v", err)
-	}
-
-	var conclusion, title, summary string
-	if mergeable {
-		conclusion = "success"
-		title = "PR is mergeable!"
-		summary = "Sufficient approvals have been submitted for the PR to be mergeable."
-	} else {
-		conclusion = "neutral"
-		title = "PR is not mergeable"
-		summary = "More approvals are necessary for the PR to be mergeable."
-	}
-
-	sha := event.GetPullRequest().GetHead().GetSHA()
-
-	opts := github.CreateCheckRunOptions{
-		Name:        "Verify gittuf policy",
-		HeadSHA:     sha,
-		ExternalID:  github.String(sha),
-		Status:      github.String("completed"),
-		Conclusion:  github.String(conclusion),
-		StartedAt:   &github.Timestamp{Time: time.Now()},
-		CompletedAt: &github.Timestamp{Time: time.Now()},
-		Output: &github.CheckRunOutput{
-			Title:   github.String(title),
-			Summary: github.String(summary),
-		},
-	}
-
-	if _, _, err := client.Checks.CreateCheckRun(ctx, owner, repository, opts); err != nil {
-		log.Default().Printf("Unable to create check run: %v", err)
+	hasPolicy, err := repo.HasPolicy()
+	if err != nil {
+		log.Default().Printf("Unable to check if policy exists: %v", err)
 		return err
+	}
+	if hasPolicy {
+		mergeable := false
+		if _, err := repo.VerifyMergeable(ctx, baseRef, fmt.Sprintf("refs/pull/%d/head", pullRequestNumber), verifymergeableopts.WithBypassRSLForFeatureRef()); err == nil {
+			// TODO: for now, we're not using the bool return
+			mergeable = true
+		} else {
+			log.Default().Printf("VerifyMergeable failed: %v", err)
+		}
+
+		var conclusion, title, summary string
+		if mergeable {
+			conclusion = "success"
+			title = "PR is mergeable!"
+			summary = "Sufficient approvals have been submitted for the PR to be mergeable."
+		} else {
+			conclusion = "neutral"
+			title = "PR is not mergeable"
+			summary = "More approvals are necessary for the PR to be mergeable."
+		}
+
+		sha := event.GetPullRequest().GetHead().GetSHA()
+
+		opts := github.CreateCheckRunOptions{
+			Name:        "Verify gittuf policy",
+			HeadSHA:     sha,
+			ExternalID:  github.String(sha),
+			Status:      github.String("completed"),
+			Conclusion:  github.String(conclusion),
+			StartedAt:   &github.Timestamp{Time: time.Now()},
+			CompletedAt: &github.Timestamp{Time: time.Now()},
+			Output: &github.CheckRunOutput{
+				Title:   github.String(title),
+				Summary: github.String(summary),
+			},
+		}
+
+		if _, _, err := client.Checks.CreateCheckRun(ctx, owner, repository, opts); err != nil {
+			log.Default().Printf("Unable to create check run: %v", err)
+			return err
+		}
 	}
 
 	return nil
