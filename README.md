@@ -41,12 +41,10 @@ available approvals meet the configured gittuf policy.
 
 ## Installation and Getting Started
 
-To install the gittuf app on your repository, see the [installation
-documentation](/docs/installation.md).
-
-Once the app is installed on your repository, take a look at the [getting
-started documentation](/docs/getting-started.md) for remaining configuration
-steps and how to start using the app on your repository.
+To install the gittuf app on your repository, see the [getting
+started documentation](/docs/getting-started.md). It'll walk you through 
+deciding how you'd like to deploy the app on your repository, and any 
+additional steps that you'll need to take after installation.
 
 ## Have Questions?
 
