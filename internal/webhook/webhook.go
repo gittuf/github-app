@@ -404,13 +404,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 			return err
 		}
 
-		// Get token again in case it's expired
-		token, err = transport.Token(ctx)
-		if err != nil {
-			return err
-		}
-
-		if err := repo.AddGitHubPullRequestAttestationForNumber(ctx, signer, owner, repository, pullRequestNumber, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token), githubopts.WithRSLEntry()); err != nil {
+		if err := repo.AddGitHubPullRequestAttestationForNumber(ctx, signer, owner, repository, pullRequestNumber, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubTokenSource(transport), githubopts.WithRSLEntry()); err != nil {
 			log.Default().Printf("Unable to create pull request attestation: %v", err)
 			return err
 		}
@@ -657,12 +651,6 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		return err
 	}
 
-	// Get token again in case it's expired
-	token, err = transport.Token(ctx)
-	if err != nil {
-		return err
-	}
-
 	var message string
 	switch event.GetAction() {
 	case reviewTypeSubmitted:
@@ -671,7 +659,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 			return nil
 		}
 
-		if err := repo.AddGitHubPullRequestApprover(ctx, signer, owner, repository, pullRequestNumber, event.GetReview().GetID(), reviewerIdentifier, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token), githubopts.WithRSLEntry()); err != nil {
+		if err := repo.AddGitHubPullRequestApprover(ctx, signer, owner, repository, pullRequestNumber, event.GetReview().GetID(), reviewerIdentifier, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubTokenSource(transport), githubopts.WithRSLEntry()); err != nil {
 			log.Default().Printf("Unable to create pull request approval attestation: %v", err)
 			return err
 		}
@@ -679,7 +667,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		message = fmt.Sprintf("Observed review from %s (@%s)", reviewerIdentifier, reviewer.GetLogin())
 
 	case reviewTypeDismissed:
-		if err := repo.DismissGitHubPullRequestApprover(ctx, signer, event.GetReview().GetID(), reviewerIdentifier, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubToken(token), githubopts.WithRSLEntry()); err != nil {
+		if err := repo.DismissGitHubPullRequestApprover(ctx, signer, event.GetReview().GetID(), reviewerIdentifier, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubTokenSource(transport), githubopts.WithRSLEntry()); err != nil {
 			log.Default().Printf("Unable to update pull request approval attestation with dismissal: %v", err)
 			return err
 		}
