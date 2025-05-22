@@ -681,7 +681,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 			return err
 		}
 
-		message = fmt.Sprintf("Observed dismissal of prior approval '%s' issued by %s (@%s)", event.GetReview().GetHTMLURL(), reviewerIdentifier, reviewer.GetLogin())
+		message = fmt.Sprintf("Observed dismissal of prior approval %s issued by %s (@%s)", event.GetReview().GetHTMLURL(), reviewerIdentifier, reviewer.GetLogin())
 	}
 
 	if err := gitRepo.Push("origin", []string{"refs/gittuf/*"}); err != nil {
