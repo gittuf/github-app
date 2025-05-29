@@ -6,4 +6,4 @@ between gittuf policies and GitHub's code review workflow for a pull request.
 
 A public good version of this app is hosted for public github.com repositories.
 This is hosted via the Open Source Security Foundation (OpenSSF) where gittuf is
-a sandbox project. See the [getting started guide](docs/getting-started.md).
+an incubating project. See the [getting started guide](docs/getting-started.md).
