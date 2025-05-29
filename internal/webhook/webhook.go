@@ -466,12 +466,12 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 						var conclusion, title, summary string
 						if mergeable {
 							conclusion = "success"
-							title = "PR is mergeable!"
-							summary = "Sufficient approvals have been submitted for the PR to be mergeable."
+							title = "PR satisfies gittuf policy!"
+							summary = "Sufficient approvals have been submitted for the PR to satisfy gittuf policy."
 						} else {
 							conclusion = "neutral"
-							title = "PR is not mergeable"
-							summary = "More approvals are necessary for the PR to be mergeable."
+							title = "PR does not satisfy gittuf policy"
+							summary = "More approvals are necessary for the PR to satisfy gittuf policy."
 						}
 
 						sha := pullRequest.GetHead().GetSHA()
@@ -550,12 +550,12 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 			var conclusion, title, summary string
 			if mergeable {
 				conclusion = "success"
-				title = "PR is mergeable!"
-				summary = "Sufficient approvals have been submitted for the PR to be mergeable."
+				title = "PR satisfies gittuf policy!"
+				summary = "Sufficient approvals have been submitted for the PR to satisfy gittuf policy."
 			} else {
 				conclusion = "neutral"
-				title = "PR is not mergeable"
-				summary = "More approvals are necessary for the PR to be mergeable."
+				title = "PR does not satisfy gittuf policy"
+				summary = "More approvals are necessary for the PR to satisfy gittuf policy."
 			}
 
 			sha := event.GetPullRequest().GetHead().GetSHA()
@@ -716,12 +716,12 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		var conclusion, title, summary string
 		if mergeable {
 			conclusion = "success"
-			title = "PR is mergeable!"
-			summary = "Sufficient approvals have been submitted for the PR to be mergeable."
+			title = "PR satisfies gittuf policy!"
+			summary = "Sufficient approvals have been submitted for the PR to satisfy gittuf policy."
 		} else {
 			conclusion = "neutral"
-			title = "PR is not mergeable"
-			summary = "More approvals are necessary for the PR to be mergeable."
+			title = "PR does not satisfy gittuf policy"
+			summary = "More approvals are necessary for the PR to satisfy gittuf policy."
 		}
 
 		sha := event.GetPullRequest().GetHead().GetSHA()
