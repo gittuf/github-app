@@ -3,9 +3,7 @@
 NOTE: This document only applies to the hosted version of the app for github.com
 repositories.
 
-## Installation
-
-### Step 0: Decide functionality level
+## Step 0: Decide functionality level
 
 First, you'll need to decide on the level of functionality that you'd like to 
 utilize from the app. There are two modes:
@@ -26,18 +24,17 @@ utilize from the app. There are two modes:
 The setup for both modes is identical until the app is installed on the 
 repository. The guide will highlight where the installation process diverges.
 
-### Step 1: Install the app
+## Step 1: Install the app
 
 To install the app on your repository, visit the GitHub [app
 listing](https://github.com/apps/gittuf-app-beta). Select the account to install
 the app under (e.g. under your personal account or an organization), and for
 which repositories.
 
-If you plan to use the app in lite mode, then the setup is complete! You can
-skip down to [post-installation](#post-installation). If setting up the app in
-full mode, proceed to step 2 below.
+If you plan to use the app in lite mode, then the setup is complete! If you are
+setting up the app in full mode, proceed to step 2 below.
 
-### Step 2: Setup full mode
+## Step 2: Setup full mode
 
 Initialize gittuf metadata on the repository following the [get started
 guide](https://github.com/gittuf/gittuf/blob/main/docs/get-started.md) for
@@ -62,14 +59,5 @@ gittuf policy stage <remote name>
 gittuf policy apply <remote name>
 ```
 
-NOTE: the app uses a fixed signing key. When the app's signing key is updated,
+NOTE: The app uses a fixed signing key. When the app's signing key is updated,
 the gittuf metadata will also have to be updated with the new key.
-
-## Post-installation
-
-Congrats! The app will now start listening for any pull requests on your
-repository, and record any approvals or dismissal of approvals. Whenever either
-of these events happen, the app will comment on the pull request, similar to
-this:
-
-[![gittuf GitHub App Approval Observation Comment](images/App-Approval.png)]
