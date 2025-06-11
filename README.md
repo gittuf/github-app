@@ -37,12 +37,16 @@ This attestation can be used to verify that the change meets gittuf policy. The
 app also adds a status check to pull requests that indicate whether the
 available approvals meet the configured gittuf policy.
 
+NOTE: gittuf stores attestations in the repository in a custom Git reference
+(`refs/gittuf/attestations`). For the app to be able to push the attestation to
+this reference, it needs push permission to the repository.
+
 ## Installation and Getting Started
 
-To install the gittuf app on your repository, see the [getting
-started documentation](/docs/getting-started.md). It'll walk you through 
-deciding how you'd like to deploy the app on your repository, and any 
-additional steps that you'll need to take after installation.
+To install the gittuf app on your repository, see the [getting started
+documentation](/docs/getting-started.md). It'll walk you through deciding how
+you'd like to deploy the app on your repository, and any additional steps that
+you'll need to take after installation.
 
 ## Have Questions?
 
