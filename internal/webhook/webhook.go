@@ -242,7 +242,15 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 	// are no commits.
 	pullRequests, _, err := client.PullRequests.ListPullRequestsWithCommit(ctx, owner, repository, currentTip, nil)
 	if err != nil {
-		return fmt.Errorf("unable to identify pull requests associated with commit '%s': %w", currentTip, err)
+		// This may be a tag then, let's check if it is
+		log.Default().Print("Event is not associated with a pull request, checking if a tag was pushed...")
+		tag, _, err := client.Git.GetTag(ctx, owner, repository, currentTip)
+		if err != nil {
+			return fmt.Errorf("unable to identify if push is associated with a tag: %w", err)
+		}
+		if tag == nil {
+			return fmt.Errorf("unable to identify pull requests associated with commit '%s': %w", currentTip, err)
+		}
 	}
 	if len(pullRequests) > 0 {
 		// we'll handle this in the PR merge / synchronize event
