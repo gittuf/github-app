@@ -5,7 +5,7 @@ go 1.24.2
 require (
 	cloud.google.com/go/kms v1.22.0
 	cloud.google.com/go/secretmanager v1.15.0
-	github.com/aws/aws-sdk-go-v2/service/kms v1.41.3
+	github.com/aws/aws-sdk-go-v2/service/kms v1.41.4
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.35.8
 	github.com/bradleyfalzon/ghinstallation/v2 v2.16.0
 	github.com/gittuf/gittuf v0.11.0
