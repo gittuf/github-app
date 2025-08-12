@@ -235,19 +235,21 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 		return err
 	}
 
-	// When a pull request is freshly merged, a push event is triggered.
-	// However, sometimes, this API endpoint identifying the PRs for the commit
-	// isn't updated quickly enough by the server. We get told that there are no
-	// PRs for the commit in question. So, this might incorrectly tell us there
-	// are no commits.
-	pullRequests, _, err := client.PullRequests.ListPullRequestsWithCommit(ctx, owner, repository, currentTip, nil)
-	if err != nil {
-		return fmt.Errorf("unable to identify pull requests associated with commit '%s': %w", currentTip, err)
-	}
-	if len(pullRequests) > 0 {
-		// we'll handle this in the PR merge / synchronize event
-		log.Default().Printf("Found pull request for commit %s", currentTip)
-		return nil
+	if !strings.HasPrefix(ref, "refs/tags/") {
+		// When a pull request is freshly merged, a push event is triggered.
+		// However, sometimes, this API endpoint identifying the PRs for the commit
+		// isn't updated quickly enough by the server. We get told that there are no
+		// PRs for the commit in question. So, this might incorrectly tell us there
+		// are no commits.
+		pullRequests, _, err := client.PullRequests.ListPullRequestsWithCommit(ctx, owner, repository, currentTip, nil)
+		if err != nil {
+			return fmt.Errorf("unable to identify pull requests associated with commit '%s': %w", currentTip, err)
+		}
+		if len(pullRequests) > 0 {
+			// we'll handle this in the PR merge / synchronize event
+			log.Default().Printf("Found pull request for commit %s", currentTip)
+			return nil
+		}
 	}
 
 	cloneURL := event.GetRepo().GetCloneURL()
@@ -308,22 +310,24 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 		}
 	}
 
-	// When a pull request is freshly merged, a push event is triggered.
-	// However, sometimes, this API endpoint identifying the PRs for the commit
-	// isn't updated quickly enough by the server. We get told that there are no
-	// PRs for the commit in question. We _repeat_ this check at this point to
-	// allow the server to catch up. If this time there are PRs returned, we
-	// don't have to push the RSL entry we just created.
-	log.Default().Printf("Repeating check for pull requests associated with commit '%s'", currentTip)
-	pullRequests, _, err = client.PullRequests.ListPullRequestsWithCommit(ctx, owner, repository, currentTip, nil)
-	if err != nil {
-		return fmt.Errorf("unable to identify pull requests associated with commit '%s': %w", currentTip, err)
-	}
-	if len(pullRequests) > 0 {
-		// there are PRs for the commit after all
-		// we'll handle this in the PR merge / synchronize event
-		log.Default().Printf("Found pull request for commit %s", currentTip)
-		return nil
+	if !strings.HasPrefix(ref, "refs/tags/") {
+		// When a pull request is freshly merged, a push event is triggered.
+		// However, sometimes, this API endpoint identifying the PRs for the commit
+		// isn't updated quickly enough by the server. We get told that there are no
+		// PRs for the commit in question. We _repeat_ this check at this point to
+		// allow the server to catch up. If this time there are PRs returned, we
+		// don't have to push the RSL entry we just created.
+		log.Default().Printf("Repeating check for pull requests associated with commit '%s'", currentTip)
+		pullRequests, _, err := client.PullRequests.ListPullRequestsWithCommit(ctx, owner, repository, currentTip, nil)
+		if err != nil {
+			return fmt.Errorf("unable to identify pull requests associated with commit '%s': %w", currentTip, err)
+		}
+		if len(pullRequests) > 0 {
+			// there are PRs for the commit after all
+			// we'll handle this in the PR merge / synchronize event
+			log.Default().Printf("Found pull request for commit %s", currentTip)
+			return nil
+		}
 	}
 
 	if err := gitRepo.Push("origin", []string{"refs/gittuf/reference-state-log"}); err != nil {
