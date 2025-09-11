@@ -473,7 +473,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 							title = "PR satisfies gittuf policy!"
 							summary = "Sufficient approvals have been submitted for the PR to satisfy gittuf policy."
 						} else {
-							conclusion = "neutral"
+							conclusion = "failure"
 							title = "PR does not satisfy gittuf policy"
 							summary = "More approvals are necessary for the PR to satisfy gittuf policy."
 						}
@@ -557,7 +557,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 				title = "PR satisfies gittuf policy!"
 				summary = "Sufficient approvals have been submitted for the PR to satisfy gittuf policy."
 			} else {
-				conclusion = "neutral"
+				conclusion = "failure"
 				title = "PR does not satisfy gittuf policy"
 				summary = "More approvals are necessary for the PR to satisfy gittuf policy."
 			}
@@ -723,7 +723,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 			title = "PR satisfies gittuf policy!"
 			summary = "Sufficient approvals have been submitted for the PR to satisfy gittuf policy."
 		} else {
-			conclusion = "neutral"
+			conclusion = "failure"
 			title = "PR does not satisfy gittuf policy"
 			summary = "More approvals are necessary for the PR to satisfy gittuf policy."
 		}
