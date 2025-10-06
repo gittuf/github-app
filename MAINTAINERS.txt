@@ -1,11 +1,11 @@
 This repository is part of the gittuf project. gittuf is built and maintained
-by developers from New York University (NYU), Chainguard, and New Jersey
-Institute of Technology (NJIT).
+by developers from New York University (NYU), Chainguard, New Jersey Institute
+of Technology (NJIT), and Bloomberg.
 
 Aditya Sirish A Yelgundhalli
   Email: aditya.sirish@nyu.edu
   GitHub username: @adityasaky
-  Affiliation: NYU
+  Affiliation: Bloomberg
 
 Justin Cappos
   Email: jcappos@nyu.edu
