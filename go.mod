@@ -3,7 +3,7 @@ module github.com/gittuf/github-app
 go 1.25.5
 
 require (
-	cloud.google.com/go/kms v1.24.0
+	cloud.google.com/go/kms v1.25.0
 	cloud.google.com/go/secretmanager v1.16.0
 	github.com/aws/aws-sdk-go-v2/service/kms v1.49.5
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.1
