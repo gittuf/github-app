@@ -130,7 +130,7 @@ func Execute() {
 		if err != nil {
 			log.Panicf("error reading app signing key: %v", err)
 		}
-		if err := os.WriteFile(privateKeyPath, privkeyBytes, 0o600); err != nil {
+		if err := os.WriteFile(privateKeyPath, privkeyBytes, 0o600); err != nil { //nolint:gosec
 			log.Panicf("error writing app signing key: %v", err)
 		}
 
@@ -139,7 +139,7 @@ func Execute() {
 			log.Panicf("error reading app public key: %v", err)
 		}
 		pubkeyPath := fmt.Sprintf("%s.pub", privateKeyPath)
-		if err := os.WriteFile(pubkeyPath, pubkeyBytes, 0o600); err != nil {
+		if err := os.WriteFile(pubkeyPath, pubkeyBytes, 0o600); err != nil { //nolint:gosec
 			log.Panicf("error writing app public key: %v", err)
 		}
 	} else {
