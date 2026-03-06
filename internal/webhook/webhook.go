@@ -25,6 +25,7 @@ import (
 	githubopts "github.com/gittuf/gittuf/experimental/gittuf/options/github"
 	rslopts "github.com/gittuf/gittuf/experimental/gittuf/options/rsl"
 	verifymergeableopts "github.com/gittuf/gittuf/experimental/gittuf/options/verifymergeable"
+	"github.com/gittuf/gittuf/pkg/gitinterface"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/google/go-github/v61/github"
@@ -269,7 +270,7 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 	if err != nil {
 		return err
 	}
-	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL}); err != nil {
+	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, Depth: 1}); err != nil {
 		log.Default().Printf("Unable to clone repository: %v", err)
 		return err
 	}
@@ -288,7 +289,7 @@ func (g *GittufApp) handlePush(ctx context.Context, event *github.PushEvent) err
 	switch {
 	case strings.HasPrefix(ref, "refs/heads"):
 		refSpec := fmt.Sprintf("%s:refs/gittuf/local-ref", ref)
-		if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
+		if err := gitRepo.FetchRefSpec("origin", []string{refSpec}, gitinterface.WithFetchDepth(1)); err != nil {
 			log.Default().Printf("Unable to fetch pushed branch: %v", err)
 			return err
 		}
@@ -373,7 +374,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	if err != nil {
 		return err
 	}
-	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, ReferenceName: plumbing.ReferenceName(baseRef)}); err != nil {
+	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, Depth: 1, ReferenceName: plumbing.ReferenceName(baseRef)}); err != nil {
 		log.Default().Printf("Unable to clone repository: %v", err)
 		return err
 	}
@@ -390,7 +391,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 	}
 
 	refSpec := fmt.Sprintf("refs/pull/%d/head:refs/pull/%d/head", pullRequestNumber, pullRequestNumber)
-	if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
+	if err := gitRepo.FetchRefSpec("origin", []string{refSpec}, gitinterface.WithFetchDepth(1)); err != nil {
 		log.Default().Printf("Unable to fetch feature branch: %v", err)
 		return err
 	}
@@ -454,7 +455,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 						// Run this check in a separate goroutine for each
 						// affected PR
 						refSpec := fmt.Sprintf("refs/pull/%d/head:refs/pull/%d/head", pullRequest.GetNumber(), pullRequest.GetNumber())
-						if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
+						if err := gitRepo.FetchRefSpec("origin", []string{refSpec}, gitinterface.WithFetchDepth(1)); err != nil {
 							log.Default().Printf("Unable to fetch feature branch for affected pull request %d: %v", pullRequest.GetNumber(), err)
 							return
 						}
@@ -634,7 +635,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	if err != nil {
 		return err
 	}
-	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, ReferenceName: plumbing.ReferenceName(baseRef)}); err != nil {
+	if _, err := git.PlainClone(localDirectory, false, &git.CloneOptions{URL: cloneURL, Depth: 1, ReferenceName: plumbing.ReferenceName(baseRef)}); err != nil {
 		log.Default().Printf("Unable to clone repository: %v", err)
 		return err
 	}
@@ -654,7 +655,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 	// We fetch using github's refs/pull/<number>/head ref as the feature ref
 	// may be from a different repository
 	refSpec := fmt.Sprintf("refs/pull/%d/head:refs/pull/%d/head", pullRequestNumber, pullRequestNumber)
-	if err := gitRepo.FetchRefSpec("origin", []string{refSpec}); err != nil {
+	if err := gitRepo.FetchRefSpec("origin", []string{refSpec}, gitinterface.WithFetchDepth(1)); err != nil {
 		log.Default().Printf("Unable to fetch feature branch: %v", err)
 		return err
 	}
