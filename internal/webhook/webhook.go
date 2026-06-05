@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/gittuf/gittuf/experimental/gittuf"
 	githubopts "github.com/gittuf/gittuf/experimental/gittuf/options/github"
@@ -105,17 +106,63 @@ type GittufApp struct {
 	WebhookSecret [][]byte
 	Params        *EnvConfig
 
-	sshSigningKeyPath string
-	init              sync.Once
+	signingKey string
+	init       sync.Once
 }
 
 func (g *GittufApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	g.init.Do(func() {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			panic(err)
+		var infraProvider provider
+		if g.Params.DevMode {
+			switch g.Params.AppSigningMethod {
+			case "ssh":
+				infraProvider = &devModeSSHProvider{env: g.Params}
+			case "gpg":
+				infraProvider = &devModeGPGProvider{env: g.Params}
+			default:
+				log.Panicf("unsupported app signing method '%s'", g.Params.AppSigningMethod)
+			}
+		} else {
+			switch g.Params.CloudProvider {
+			case cloudProviderAWS:
+				infraProvider = &awsProvider{env: g.Params}
+			case cloudProviderGCP:
+				infraProvider = &gcpProvider{env: g.Params}
+			default:
+				log.Panicf("unsupported cloud provider '%s'", g.Params.CloudProvider)
+			}
 		}
-		g.sshSigningKeyPath = filepath.Join(homeDir, ".ssh", KeyFileName)
+
+		if err := infraProvider.PrepareGitSigningKey(r.Context()); err != nil {
+			log.Panicf("error preparing git signing key: %v", err)
+		}
+
+		signer, err := infraProvider.GetTransportSigner(r.Context())
+		if err != nil {
+			log.Panicf("error configuring signer for ghinstallation transport: %v", err)
+		}
+		transport, err := ghinstallation.NewAppsTransportWithOptions(http.DefaultTransport, g.Params.AppID, ghinstallation.WithSigner(signer))
+		if err != nil {
+			log.Panicf("error creating GitHub App transport: %v", err)
+		}
+		if g.Params.GitHubURL != DefaultGitHubURL {
+			transport.BaseURL = fmt.Sprintf("%s/%s/%s/", g.Params.GitHubURL, "api", "v3")
+		}
+		g.Transport = transport
+
+		webhookSecrets, err := infraProvider.GetWebhookSecrets(r.Context())
+		if err != nil {
+			log.Panicf("error fetching webhook secrets: %v", err)
+		}
+		g.WebhookSecret = webhookSecrets
+
+		slog.SetDefault(slog.New(slog.NewTextHandler(log.Default().Writer(), &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		})))
+
+		////////////////////////////////////////////////////////////
+
+		// Configure git -- eventually we should fold this into the infra provider interface
 
 		cmd := exec.Command("git", "config", "--global", "user.name", "gittuf-github-app")
 		if err := cmd.Run(); err != nil {
@@ -127,20 +174,44 @@ func (g *GittufApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			panic(err)
 		}
 
-		// main.go sets up this key for us
-		cmd = exec.Command("git", "config", "--global", "user.signingkey", g.sshSigningKeyPath) //nolint:gosec
-		if err := cmd.Run(); err != nil {
-			panic(err)
-		}
+		switch g.Params.AppSigningMethod {
+		case "ssh":
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				panic(err)
+			}
+			g.signingKey = filepath.Join(homeDir, ".ssh", KeyFileName)
 
-		cmd = exec.Command("git", "config", "--global", "gpg.format", "ssh")
-		if err := cmd.Run(); err != nil {
-			panic(err)
-		}
+			// The infra provider writes the key to this location
+			cmd = exec.Command("git", "config", "--global", "user.signingkey", g.signingKey) //nolint:gosec
+			if err := cmd.Run(); err != nil {
+				panic(err)
+			}
 
-		slog.SetDefault(slog.New(slog.NewTextHandler(log.Default().Writer(), &slog.HandlerOptions{
-			Level: slog.LevelDebug,
-		})))
+			cmd = exec.Command("git", "config", "--global", "gpg.format", "ssh")
+			if err := cmd.Run(); err != nil {
+				panic(err)
+			}
+		case "gpg":
+			// This is hacky because we're re-reading the key bytes
+			keyring, err := openpgp.ReadArmoredKeyRing(bytes.NewReader([]byte(g.Params.AppSigningKey)))
+			if err != nil {
+				panic(fmt.Errorf("error parsing app signing key: %w", err))
+			}
+
+			keyID := keyring[0].PrimaryKey.KeyIdString()
+			g.signingKey = fmt.Sprintf("gpg:%s", keyID) // all subsequent uses are to load signers from within gittuf, where this prefix is necessary
+
+			cmd = exec.Command("git", "config", "--global", "user.signingkey", keyID) //nolint:gosec
+			if err := cmd.Run(); err != nil {
+				panic(err)
+			}
+
+			cmd = exec.Command("git", "config", "--global", "gpg.format", "openpgp")
+			if err := cmd.Run(); err != nil {
+				panic(err)
+			}
+		}
 	})
 
 	log.Default().Printf("Serving app...")
@@ -407,7 +478,7 @@ func (g *GittufApp) handlePullRequest(ctx context.Context, event *github.PullReq
 			return nil
 		}
 
-		signer, err := gittuf.LoadSigner(repo, g.sshSigningKeyPath)
+		signer, err := gittuf.LoadSigner(repo, g.signingKey)
 		if err != nil {
 			return err
 		}
@@ -663,7 +734,7 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 		return err
 	}
 
-	signer, err := gittuf.LoadSigner(repo, g.sshSigningKeyPath)
+	signer, err := gittuf.LoadSigner(repo, g.signingKey)
 	if err != nil {
 		return err
 	}
