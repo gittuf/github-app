@@ -20,10 +20,7 @@ import (
 	gkms "cloud.google.com/go/kms/apiv1"
 	gsecretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
-	akms "github.com/aws/aws-sdk-go-v2/service/kms"
-	asecretsmanager "github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/bradleyfalzon/ghinstallation/v2"
-	"github.com/gittuf/github-app/internal/awskms"
 	"github.com/gittuf/github-app/internal/webhook"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/kelseyhightower/envconfig"
@@ -35,6 +32,8 @@ const (
 	cloudProviderAWS = "aws"
 	cloudProviderGCP = "gcp"
 )
+
+var ErrNotImplemented = errors.New("this functionality is not implemented yet")
 
 func Execute() {
 	/*
@@ -52,53 +51,28 @@ func Execute() {
 
 	log.Default().Println("Processed env vars")
 
-	var (
-		signer ghinstallation.Signer
-		err    error
-	)
+	var infraProvider provider
 	if env.DevMode {
-		// TODO: we should eventually remove this code path altogether
-
-		log.Default().Println("App is deployed in dev mode, loading GitHub app signer from disk...")
-		keyBytes, err := os.ReadFile(env.KMSKey)
-		if err != nil {
-			log.Panicf("unable to read signing key: %v", err)
-		}
-
-		_, rawKey, err := decodeAndParsePEM(keyBytes)
-		if err != nil {
-			log.Panicf("unable to parse signing key: %v", err)
-		}
-
-		key, ok := rawKey.(*rsa.PrivateKey)
-		if !ok {
-			log.Panicf("invalid key type, must be RSA")
-		}
-
-		signer = ghinstallation.NewRSASigner(jwt.SigningMethodRS256, key)
-		log.Printf("Created signer using on disk key")
+		infraProvider = &devModeSSHProvider{env: &env}
 	} else {
 		switch env.CloudProvider {
 		case cloudProviderAWS:
-			log.Panic("AWS support isn't complete yet :(")
-
-			kms := akms.New(akms.Options{})
-			signer, err = awskms.New(ctx, kms, env.KMSKey)
-			if err != nil {
-				log.Panicf("error creating AWS signer: %v", err)
-			}
+			infraProvider = &awsProvider{env: &env}
 		case cloudProviderGCP:
-			kms, err := gkms.NewKeyManagementClient(ctx)
-			if err != nil {
-				log.Panicf("could not create kms client: %v", err)
-			}
-			signer, err = gcpkms.New(ctx, kms, env.KMSKey)
-			if err != nil {
-				log.Panicf("error creating GCP signer: %v", err)
-			}
+			infraProvider = &gcpProvider{env: &env}
+		default:
+			log.Panicf("unsupported cloud provider '%s'", env.CloudProvider)
 		}
 	}
 
+	if err := infraProvider.PrepareGitSigningKey(ctx); err != nil {
+		log.Panicf("error preparing git signing key: %v", err)
+	}
+
+	signer, err := infraProvider.GetTransportSigner(ctx)
+	if err != nil {
+		log.Panicf("error configuring signer for ghinstallation transport: %v", err)
+	}
 	transport, err := ghinstallation.NewAppsTransportWithOptions(http.DefaultTransport, env.AppID, ghinstallation.WithSigner(signer))
 	if err != nil {
 		log.Panicf("error creating GitHub App transport: %v", err)
@@ -107,95 +81,9 @@ func Execute() {
 		transport.BaseURL = fmt.Sprintf("%s/%s/%s/", env.GitHubURL, "api", "v3")
 	}
 
-	// Set up app signing key, assuming it's ssh and therefore a secret.
-	// TODO: we should switch this to gitsign
-	homeDir, err := os.UserHomeDir()
+	webhookSecrets, err := infraProvider.GetWebhookSecrets(ctx)
 	if err != nil {
-		log.Panicf("unable to identify user's home directory: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Join(homeDir, ".ssh"), 0o755); err != nil {
-		log.Panicf("unable to create .ssh directory: %v", err)
-	}
-	privateKeyPath := filepath.Join(homeDir, ".ssh", webhook.KeyFileName)
-
-	webhookSecrets := [][]byte{}
-	if env.DevMode {
-		// TODO: we should eventually remove this code path altogether
-
-		log.Default().Println("App is deployed in dev mode, loading webhook secrets from environment variable...")
-		webhookSecrets = append(webhookSecrets, []byte(env.WebhookSecret))
-
-		log.Default().Println("App is deployed in dev mode, loading metadata and commit signer from disk...")
-		privkeyBytes, err := os.ReadFile(env.AppSigningKey)
-		if err != nil {
-			log.Panicf("error reading app signing key: %v", err)
-		}
-		if err := os.WriteFile(privateKeyPath, privkeyBytes, 0o600); err != nil { //nolint:gosec
-			log.Panicf("error writing app signing key: %v", err)
-		}
-
-		pubkeyBytes, err := os.ReadFile(env.AppSigningPubKey)
-		if err != nil {
-			log.Panicf("error reading app public key: %v", err)
-		}
-		pubkeyPath := fmt.Sprintf("%s.pub", privateKeyPath)
-		if err := os.WriteFile(pubkeyPath, pubkeyBytes, 0o600); err != nil { //nolint:gosec
-			log.Panicf("error writing app public key: %v", err)
-		}
-	} else {
-		switch env.CloudProvider {
-		case cloudProviderAWS:
-			log.Panic("AWS support isn't complete yet :(")
-
-			secretmanager := asecretsmanager.New(asecretsmanager.Options{}) // TODO
-			for _, name := range strings.Split(env.WebhookSecret, ",") {
-				resp, err := secretmanager.GetSecretValue(ctx, &asecretsmanager.GetSecretValueInput{
-					SecretId: &name,
-				})
-				if err != nil {
-					log.Panicf("error fetching webhook secret '%s' from AWS: %v", name, err)
-				}
-				// TODO: may be SecretBinary?
-				webhookSecrets = append(webhookSecrets, []byte(*resp.SecretString))
-			}
-		case cloudProviderGCP:
-			secretmanager, err := gsecretmanager.NewClient(ctx)
-			if err != nil {
-				log.Panicf("could not create secret manager client: %v", err)
-			}
-			for _, name := range strings.Split(env.WebhookSecret, ",") {
-				resp, err := secretmanager.AccessSecretVersion(ctx, &secretmanagerpb.AccessSecretVersionRequest{
-					Name: name,
-				})
-				if err != nil {
-					log.Panicf("error fetching webhook secret %s: %v", name, err)
-				}
-				webhookSecrets = append(webhookSecrets, resp.GetPayload().GetData())
-			}
-
-			resp, err := secretmanager.AccessSecretVersion(ctx, &secretmanagerpb.AccessSecretVersionRequest{
-				Name: env.AppSigningKey,
-			})
-			if err != nil {
-				log.Panicf("error fetching signing key: %v", err)
-			}
-
-			if err := os.WriteFile(privateKeyPath, resp.GetPayload().GetData(), 0o600); err != nil {
-				log.Panicf("unable to write private key; %v", err)
-			}
-
-			resp, err = secretmanager.AccessSecretVersion(ctx, &secretmanagerpb.AccessSecretVersionRequest{
-				Name: env.AppSigningPubKey,
-			})
-			if err != nil {
-				log.Panicf("error fetching public key: %v", err)
-			}
-
-			pubkeyPath := fmt.Sprintf("%s.pub", privateKeyPath)
-			if err := os.WriteFile(pubkeyPath, resp.GetPayload().GetData(), 0o600); err != nil {
-				log.Panicf("unable to write public key; %v", err)
-			}
-		}
+		log.Panicf("error fetching webhook secrets: %v", err)
 	}
 
 	mux := http.NewServeMux()
@@ -212,6 +100,173 @@ func Execute() {
 		Handler:           mux,
 	}
 	log.Panic(srv.ListenAndServe())
+}
+
+type provider interface {
+	GetWebhookSecrets(context.Context) ([][]byte, error)
+	PrepareGitSigningKey(context.Context) error
+	GetTransportSigner(context.Context) (ghinstallation.Signer, error)
+}
+
+type devModeSSHProvider struct {
+	env *webhook.EnvConfig
+}
+
+func (p *devModeSSHProvider) GetWebhookSecrets(_ context.Context) ([][]byte, error) {
+	return [][]byte{[]byte(p.env.WebhookSecret)}, nil
+}
+
+func (p *devModeSSHProvider) PrepareGitSigningKey(_ context.Context) error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("unable to identify user's home directory: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(homeDir, ".ssh"), 0o755); err != nil {
+		return fmt.Errorf("unable to create .ssh directory: %v", err)
+	}
+	privateKeyPath := filepath.Join(homeDir, ".ssh", webhook.KeyFileName)
+
+	privkeyBytes, err := os.ReadFile(p.env.AppSigningKey)
+	if err != nil {
+		return fmt.Errorf("error reading app signing key: %v", err)
+	}
+	if err := os.WriteFile(privateKeyPath, privkeyBytes, 0o600); err != nil { //nolint:gosec
+		return fmt.Errorf("error writing app signing key: %v", err)
+	}
+
+	pubkeyBytes, err := os.ReadFile(p.env.AppSigningPubKey)
+	if err != nil {
+		return fmt.Errorf("error reading app public key: %v", err)
+	}
+	pubkeyPath := fmt.Sprintf("%s.pub", privateKeyPath)
+	if err := os.WriteFile(pubkeyPath, pubkeyBytes, 0o600); err != nil { //nolint:gosec
+		return fmt.Errorf("error writing app public key: %v", err)
+	}
+
+	return nil
+}
+
+func (p *devModeSSHProvider) GetTransportSigner(_ context.Context) (ghinstallation.Signer, error) {
+	keyBytes, err := os.ReadFile(p.env.KMSKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read signing key: %v", err)
+	}
+
+	_, rawKey, err := decodeAndParsePEM(keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse signing key: %v", err)
+	}
+
+	key, ok := rawKey.(*rsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("invalid key type, must be RSA")
+	}
+
+	return ghinstallation.NewRSASigner(jwt.SigningMethodRS256, key), nil
+}
+
+type gcpProvider struct {
+	env           *webhook.EnvConfig
+	secretManager *gsecretmanager.Client
+}
+
+func (p *gcpProvider) getSecretManagerClient(ctx context.Context) (*gsecretmanager.Client, error) {
+	if p.secretManager != nil {
+		return p.secretManager, nil
+	}
+
+	secretManager, err := gsecretmanager.NewClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("could not create secret manager client: %v", err)
+	}
+
+	p.secretManager = secretManager
+	return p.secretManager, nil
+}
+
+func (p *gcpProvider) GetWebhookSecrets(ctx context.Context) ([][]byte, error) {
+	secretmanager, err := p.getSecretManagerClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	webhookSecrets := [][]byte{}
+	for _, name := range strings.Split(p.env.WebhookSecret, ",") {
+		resp, err := secretmanager.AccessSecretVersion(ctx, &secretmanagerpb.AccessSecretVersionRequest{
+			Name: name,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error fetching webhook secret %s: %v", name, err)
+		}
+		webhookSecrets = append(webhookSecrets, resp.GetPayload().GetData())
+	}
+
+	return webhookSecrets, nil
+}
+
+func (p *gcpProvider) PrepareGitSigningKey(ctx context.Context) error {
+	secretmanager, err := p.getSecretManagerClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	resp, err := secretmanager.AccessSecretVersion(ctx, &secretmanagerpb.AccessSecretVersionRequest{
+		Name: p.env.AppSigningKey,
+	})
+	if err != nil {
+		return fmt.Errorf("error fetching signing key: %v", err)
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("unable to identify user's home directory: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(homeDir, ".ssh"), 0o755); err != nil {
+		return fmt.Errorf("unable to create .ssh directory: %v", err)
+	}
+	privateKeyPath := filepath.Join(homeDir, ".ssh", webhook.KeyFileName)
+
+	if err := os.WriteFile(privateKeyPath, resp.GetPayload().GetData(), 0o600); err != nil {
+		return fmt.Errorf("unable to write private key; %v", err)
+	}
+
+	resp, err = secretmanager.AccessSecretVersion(ctx, &secretmanagerpb.AccessSecretVersionRequest{
+		Name: p.env.AppSigningPubKey,
+	})
+	if err != nil {
+		return fmt.Errorf("error fetching public key: %v", err)
+	}
+
+	pubkeyPath := fmt.Sprintf("%s.pub", privateKeyPath)
+	if err := os.WriteFile(pubkeyPath, resp.GetPayload().GetData(), 0o600); err != nil {
+		return fmt.Errorf("unable to write public key; %v", err)
+	}
+
+	return nil
+}
+
+func (p *gcpProvider) GetTransportSigner(ctx context.Context) (ghinstallation.Signer, error) {
+	kms, err := gkms.NewKeyManagementClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("could not create kms client: %v", err)
+	}
+	return gcpkms.New(ctx, kms, p.env.KMSKey)
+}
+
+type awsProvider struct {
+	env *webhook.EnvConfig
+}
+
+func (p *awsProvider) GetWebhookSecrets(ctx context.Context) ([][]byte, error) {
+	return nil, ErrNotImplemented
+}
+
+func (p *awsProvider) PrepareGitSigningKey(ctx context.Context) error {
+	return ErrNotImplemented
+}
+
+func (p *awsProvider) GetTransportSigner(ctx context.Context) (ghinstallation.Signer, error) {
+	return nil, ErrNotImplemented
 }
 
 // This entire section needs to go once we hook this up with a secrets manager.
