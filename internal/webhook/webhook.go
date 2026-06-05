@@ -90,6 +90,10 @@ type EnvConfig struct {
 	// app's signatures.
 	AppSigningPubKey string `envconfig:"APP_SIGNING_PUBKEY" required:"true"`
 
+	// AppSigningMethod indicates the method used to sign metadata and commits
+	// by the app.
+	AppSigningMethod string `envconfig:"APP_SIGNING_METHOD" default:"ssh"`
+
 	// CommentOnAffectedPRs indicates whether the app should post a comment
 	// on PRs where prior approvals do not hold when the base branch is
 	// affected by a push or a merge.

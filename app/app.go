@@ -3,6 +3,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/rsa"
 	"crypto/x509"
@@ -12,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -53,7 +55,14 @@ func Execute() {
 
 	var infraProvider provider
 	if env.DevMode {
-		infraProvider = &devModeSSHProvider{env: &env}
+		switch env.AppSigningMethod {
+		case "ssh":
+			infraProvider = &devModeSSHProvider{env: &env}
+		case "gpg":
+			infraProvider = &devModeGPGProvider{env: &env}
+		default:
+			log.Panicf("unsupported app signing method '%s'", env.AppSigningMethod)
+		}
 	} else {
 		switch env.CloudProvider {
 		case cloudProviderAWS:
@@ -165,6 +174,48 @@ func (p *devModeSSHProvider) GetTransportSigner(_ context.Context) (ghinstallati
 	return ghinstallation.NewRSASigner(jwt.SigningMethodRS256, key), nil
 }
 
+type devModeGPGProvider struct {
+	env *webhook.EnvConfig
+}
+
+func (p *devModeGPGProvider) GetWebhookSecrets(_ context.Context) ([][]byte, error) {
+	return [][]byte{[]byte(p.env.WebhookSecret)}, nil
+}
+
+func (p *devModeGPGProvider) PrepareGitSigningKey(_ context.Context) error {
+	// In Dev mode + GPG, we assume env.AppSigningKey contains the armored
+	// private key which we must import into the default GPG keyring for Git to
+	// use. We just rely on the standard gpg binary to handle everything for us.
+
+	cmd := exec.Command("gpg", "--import")
+	cmd.Stdin = bytes.NewReader([]byte(p.env.AppSigningKey))
+
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("error importing GPG key: %v, output: %s", err, string(output))
+	}
+
+	return nil
+}
+
+func (p *devModeGPGProvider) GetTransportSigner(_ context.Context) (ghinstallation.Signer, error) {
+	keyBytes, err := os.ReadFile(p.env.KMSKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read signing key: %v", err)
+	}
+
+	_, rawKey, err := decodeAndParsePEM(keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse signing key: %v", err)
+	}
+
+	key, ok := rawKey.(*rsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("invalid key type, must be RSA")
+	}
+
+	return ghinstallation.NewRSASigner(jwt.SigningMethodRS256, key), nil
+}
+
 type gcpProvider struct {
 	env           *webhook.EnvConfig
 	secretManager *gsecretmanager.Client
@@ -257,15 +308,15 @@ type awsProvider struct {
 	env *webhook.EnvConfig
 }
 
-func (p *awsProvider) GetWebhookSecrets(ctx context.Context) ([][]byte, error) {
+func (p *awsProvider) GetWebhookSecrets(_ context.Context) ([][]byte, error) {
 	return nil, ErrNotImplemented
 }
 
-func (p *awsProvider) PrepareGitSigningKey(ctx context.Context) error {
+func (p *awsProvider) PrepareGitSigningKey(_ context.Context) error {
 	return ErrNotImplemented
 }
 
-func (p *awsProvider) GetTransportSigner(ctx context.Context) (ghinstallation.Signer, error) {
+func (p *awsProvider) GetTransportSigner(_ context.Context) (ghinstallation.Signer, error) {
 	return nil, ErrNotImplemented
 }
 
