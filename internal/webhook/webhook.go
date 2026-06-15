@@ -99,6 +99,10 @@ type EnvConfig struct {
 	// on PRs where prior approvals do not hold when the base branch is
 	// affected by a push or a merge.
 	CommentOnAffectedPRs bool `envconfig:"COMMENT_ON_AFFECTED_PRS" default:"false"`
+
+	// UseGitHubAPI indicates whether to use the GitHub API for certain actions
+	// like determining the target tree for a merge.
+	UseGitHubAPI bool `envconfig:"USE_GITHUB_API" default:"false"`
 }
 
 type GittufApp struct {
@@ -747,7 +751,16 @@ func (g *GittufApp) handlePullRequestReview(ctx context.Context, event *github.P
 			return nil
 		}
 
-		if err := repo.AddGitHubPullRequestApprover(ctx, signer, owner, repository, pullRequestNumber, event.GetReview().GetID(), reviewerIdentifier, true, githubopts.WithGitHubBaseURL(g.Params.GitHubURL), githubopts.WithGitHubTokenSource(transport), githubopts.WithRSLEntry()); err != nil {
+		opts := []githubopts.Option{
+			githubopts.WithGitHubBaseURL(g.Params.GitHubURL),
+			githubopts.WithGitHubTokenSource(transport),
+			githubopts.WithRSLEntry(),
+		}
+		if g.Params.UseGitHubAPI {
+			opts = append(opts, githubopts.WithUseGitHubAPI())
+		}
+
+		if err := repo.AddGitHubPullRequestApprover(ctx, signer, owner, repository, pullRequestNumber, event.GetReview().GetID(), reviewerIdentifier, true, opts...); err != nil {
 			log.Default().Printf("Unable to create pull request approval attestation: %v", err)
 			return err
 		}
