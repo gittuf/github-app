@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/kms v1.33.0
 	cloud.google.com/go/secretmanager v1.21.0
 	github.com/ProtonMail/go-crypto v1.4.1
-	github.com/aws/aws-sdk-go-v2/service/kms v1.57.1
+	github.com/aws/aws-sdk-go-v2/service/kms v1.58.0
 	github.com/bradleyfalzon/ghinstallation/v2 v2.19.0
 	github.com/gittuf/gittuf v0.15.0
 	github.com/go-git/go-git/v5 v5.19.2
@@ -14,7 +14,7 @@ require (
 	github.com/google/go-github/v61 v61.0.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/octo-sts/app v0.8.0
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 )
 
 require (
