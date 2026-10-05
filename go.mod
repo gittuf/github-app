@@ -5,7 +5,7 @@ go 1.26.4
 require (
 	cloud.google.com/go/kms v1.35.0
 	cloud.google.com/go/secretmanager v1.22.0
-	github.com/ProtonMail/go-crypto v1.5.1
+	github.com/ProtonMail/go-crypto v1.5.2
 	github.com/aws/aws-sdk-go-v2/service/kms v1.61.1
 	github.com/bradleyfalzon/ghinstallation/v2 v2.19.0
 	github.com/gittuf/gittuf v0.16.0
